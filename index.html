@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+<script src="pubJavascripts/javascripts/d3.v3.min.js"></script>
+<script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+<script src="pubJavascripts/javascripts/fisheye.js"></script>
+<script src="pubJavascripts/myscripts/util.js"></script>
+<script src="pubJavascripts/myscripts/sliderRelationship.js"></script>
+<script src="pubJavascripts/myscripts/sliderRadius.js"></script>
+<script src="pubJavascripts/myscripts/streamGraph.js"></script>
+<script src="pubJavascripts/myscripts/main.js"></script>
+
+<script type='text/javascript' src="https://code.jquery.com/ui/1.11.0/jquery-ui.min.js"> </script>
+<link href="pubJavascripts/styles/timeArcs.css" rel="stylesheet" type="text/css" />
+<link href="pubJavascripts/styles/jquery-ui.css" rel="stylesheet" type="text/css" />
+
+<h3>RESEARCHES</h3>
+
+<div id="mode-selector" style="margin-bottom: 20px; padding: 10px; background-color: #f0f0f0; border-radius: 4px;">
+    <strong>Mode:</strong>
+    <label style="margin-right: 20px;">
+        <input type="radio" name="input-mode" value="manual" checked> Manual Entry
+    </label>
+    <label>
+        <input type="radio" name="input-mode" value="recommendation"> AI Recommendation
+    </label>
+</div>
+
+<div id="add-project-section" style="margin-bottom: 30px; padding: 15px; border: 1px solid #ccc; background-color: #f9f9f9;">
+    <h4 id="section-title">Add New Project</h4>
+    <form id="add-project-form">
+        <div style="margin-bottom: 10px;">
+            <label for="input-code">Code:</label>
+            <input type="text" id="input-code" placeholder="e.g., 24-0001" required style="width: 200px;">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label for="input-time">Time (Year):</label>
+            <input type="number" id="input-time" placeholder="e.g., 2024" required style="width: 200px;">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label for="input-theme">Theme:</label>
+            <input type="text" id="input-theme" placeholder="e.g., AI / Machine Learning" required style="width: 300px;">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label for="input-title">Title:</label>
+            <input type="text" id="input-title" placeholder="Enter project title" required style="width: 500px;">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label for="input-authors">Authors:</label>
+            <input type="text" id="input-authors" placeholder="e.g., Author1,Author2" required style="width: 400px;">
+        </div>
+        <button type="submit" id="add-project-btn" style="padding: 8px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 4px;">Add Project</button>
+        <span id="add-project-status" style="margin-left: 15px;"></span>
+    </form>
+    
+    <form id="recommendation-form" style="display: none;">
+        <div style="margin-bottom: 10px;">
+            <label for="input-rec-title">Project Title:</label>
+            <input type="text" id="input-rec-title" placeholder="Enter project title for recommendations" required style="width: 600px;">
+        </div>
+        <button type="button" id="get-recommendations-btn" style="padding: 8px 15px; background-color: #2196F3; color: white; border: none; cursor: pointer; border-radius: 4px;">Get Recommendations</button>
+        <span id="rec-status" style="margin-left: 15px;"></span>
+    </form>
+    
+    <div id="recommendations-display" style="display: none; margin-top: 20px; padding: 15px; background-color: #e3f2fd; border-left: 4px solid #2196F3;">
+        <h4>Recommendations</h4>
+        <div id="predicted-theme-display" style="margin-bottom: 15px; font-weight: bold;"></div>
+        <div id="recommendations-list"></div>
+        
+        <div style="margin-top: 20px; padding: 10px; background-color: white; border: 1px solid #ccc; border-radius: 4px;">
+            <h5>Accept Recommendation</h5>
+            <div style="margin-bottom: 10px;">
+                <label for="rec-code">Code:</label>
+                <input type="text" id="rec-code" placeholder="e.g., 24-0001" style="width: 200px;">
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="rec-time">Time (Year):</label>
+                <input type="number" id="rec-time" placeholder="e.g., 2024" style="width: 200px;">
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="rec-authors-select">Select Authors:</label>
+                <input type="text" id="rec-authors-select" placeholder="Selected authors will appear here" style="width: 400px;" readonly>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label>
+                    <input type="checkbox" id="rec-select-all"> Select All Recommended
+                </label>
+            </div>
+            <button type="button" id="accept-recommendation-btn" style="padding: 8px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 4px;">Accept & Add Project</button>
+        </div>
+    </div>
+
+</div>
+
+<div id="research-list"></div>
+
+<script>
+// Utility function to create safe HTML IDs from researcher names
+function getSafeId(str) {
+    return str
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+function loadAndDisplayResearch() {
+    d3.tsv("grants_final.tsv", function(error, data) {
+        if (error) {
+            console.error("Error loading grants_final.tsv:", error);
+            return;
+        }
+        
+        var container = d3.select("#research-list");
+        
+        container.selectAll("ul")
+            .data([0])
+            .enter().append("ul")
+            .style("list-style-type", "none")
+            .style("padding", "0");
+        
+        var ul = container.select("ul");
+        
+        ul.selectAll("li")
+            .data(data)
+            .enter().append("li")
+            .style("margin-bottom", "15px")
+            .html(function(d) {
+                var code = d.Code || "";
+                var time = d.Time || "";
+                var theme = d.Theme || "";
+                var title = d.Title || "";
+                var authors = d.Authors || "";
+                
+                // Parse authors (comma-separated)
+                var authorList = authors.split(",").map(function(a) { return a.trim(); });
+                var formattedAuthors = authorList.join(", ");
+                
+                return '<strong>[' + code + '] ' + title + '</strong><br/>' +
+                       'Year: ' + time + ' | Theme: ' + theme + '<br/>' +
+                       'Authors: ' + formattedAuthors;
+            });
+    });
+}
+
+// Load initial research data
+loadAndDisplayResearch();
+
+// ========== MODE SWITCHING ==========
+document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const manualForm = document.getElementById('add-project-form');
+        const recForm = document.getElementById('recommendation-form');
+        const sectionTitle = document.getElementById('section-title');
+        
+        if (this.value === 'manual') {
+            manualForm.style.display = 'block';
+            recForm.style.display = 'none';
+            document.getElementById('recommendations-display').style.display = 'none';
+            sectionTitle.textContent = 'Add New Project';
+        } else {
+            manualForm.style.display = 'none';
+            recForm.style.display = 'block';
+            sectionTitle.textContent = 'AI-Powered Researcher Recommendation';
+        }
+    });
+});
+
+// ========== RECOMMENDATION SYSTEM ==========
+let currentRecommendations = null;
+
+document.getElementById('get-recommendations-btn').addEventListener('click', function() {
+    const projectTitle = document.getElementById('input-rec-title').value.trim();
+    const statusEl = document.getElementById('rec-status');
+    
+    if (!projectTitle) {
+        statusEl.textContent = 'Please enter a project title.';
+        statusEl.style.color = 'red';
+        return;
+    }
+    
+    statusEl.textContent = 'Loading recommendations...';
+    statusEl.style.color = 'blue';
+    
+    $.ajax({
+        url: '/recommend_researchers',
+        type: 'POST',
+        data: {
+            project_title: projectTitle,
+            top_n: 5
+        },
+        success: function(response) {
+            statusEl.textContent = 'Recommendations received!';
+            statusEl.style.color = 'green';
+            
+            console.log('FULL Response:', JSON.stringify(response, null, 2));
+            console.log('Response recommendations:', response.recommendations);
+            if (response.recommendations && response.recommendations.length > 0) {
+                console.log('First recommendation:', JSON.stringify(response.recommendations[0], null, 2));
+            }
+            
+            currentRecommendations = response;
+            try {
+                displayRecommendations(response);
+                document.getElementById('recommendations-display').style.display = 'block';
+            } catch(e) {
+                console.error('Error displaying recommendations:', e);
+                statusEl.textContent = 'Error displaying recommendations: ' + e.message;
+                statusEl.style.color = 'red';
+            }
+        },
+        error: function(xhr, status, error) {
+            statusEl.textContent = 'Error getting recommendations';
+            statusEl.style.color = 'red';
+            console.error('Recommendation error:', xhr.responseText);
+            
+            try {
+                const errorResponse = JSON.parse(xhr.responseText);
+                alert('Error: ' + (errorResponse.error || error));
+            } catch(e) {
+                alert('Error: ' + error);
+            }
+        }
+    });
+});
+
+function displayRecommendations(response) {
+    try {
+        console.log('displayRecommendations called with:', response);
+        
+        const themeDisplay = document.getElementById('predicted-theme-display');
+        const recList = document.getElementById('recommendations-list');
+        
+        if (!themeDisplay || !recList) {
+            console.error('Required elements not found in DOM');
+            return;
+        }
+        
+        themeDisplay.innerHTML = `<strong>Predicted Theme:</strong> ${response.predicted_theme}`;
+        
+        if (!response.recommendations || response.recommendations.length === 0) {
+            recList.innerHTML = '<p>No recommendations found.</p>';
+            return;
+        }
+        
+        let html = '<table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">';
+        html += '<tr style="background-color: #f5f5f5; border-bottom: 2px solid #ddd;">';
+        html += '<th style="padding: 8px; text-align: left; border: 1px solid #ddd;"><input type="checkbox" class="rec-checkbox-header"></th>';
+        html += '<th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Researcher</th>';
+        html += '<th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Score</th>';
+        html += '<th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Theme Projects</th>';
+        html += '<th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Total Projects</th>';
+        html += '<th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Breakdown</th>';
+        html += '</tr>';
+        
+        response.recommendations.forEach((rec, idx) => {
+            console.log(`Processing researcher ${idx}:`, rec);
+            html += '<tr style="border-bottom: 1px solid #ddd;">';
+            html += `<td style="padding: 8px; border: 1px solid #ddd;"><input type="checkbox" class="rec-checkbox" data-researcher="${rec.researcher}" data-researcher-id="${getSafeId(rec.researcher)}"></td>`;
+            html += `<td style="padding: 8px; border: 1px solid #ddd;">${rec.researcher}</td>`;
+            html += `<td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${rec.score.toFixed(2)}</td>`;
+            html += `<td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${rec.theme_projects}</td>`;
+            html += `<td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${rec.total_projects}</td>`;
+            html += `<td style="padding: 8px; text-align: center; border: 1px solid #ddd;"><button class="breakdown-btn" data-researcher="${rec.researcher}" data-researcher-id="${getSafeId(rec.researcher)}" style="padding: 4px 8px; background-color: #2196F3; color: white; border: none; cursor: pointer; border-radius: 3px;">View</button></td>`;
+            html += '</tr>';
+        });
+        
+        html += '</table>';
+        
+        // Add visualization section for breakdowns
+        html += '<div id="breakdown-visualizations" style="margin-top: 20px;">';
+        response.recommendations.forEach((rec, idx) => {
+            html += createBreakdownVisualization(rec, getSafeId(rec.researcher));
+        });
+        html += '</div>';
+        
+        recList.innerHTML = html;
+        console.log('HTML set to recommendations-list');
+        
+        // Handle breakdown button clicks
+        document.querySelectorAll('.breakdown-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const researcherId = this.dataset.researcherId;
+                const researcher = this.dataset.researcher;
+                console.log('Clicked breakdown for:', researcher, 'ID:', researcherId);
+                const vizSection = document.getElementById(`breakdown-${researcherId}`);
+                if (vizSection) {
+                    vizSection.style.display = vizSection.style.display === 'none' ? 'block' : 'none';
+                    console.log('Toggled visibility for:', researcher);
+                } else {
+                    console.error('Visualization section not found for:', researcherId);
+                }
+            });
+        });
+        
+        // Handle checkbox selection
+        document.querySelectorAll('.rec-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', updateSelectedAuthors);
+        });
+        
+        const headerCheckbox = document.querySelector('.rec-checkbox-header');
+        if (headerCheckbox) {
+            headerCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+                document.querySelectorAll('.rec-checkbox').forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                });
+                updateSelectedAuthors();
+            });
+        }
+        
+        console.log('displayRecommendations completed successfully');
+    } catch(e) {
+        console.error('Error in displayRecommendations:', e);
+        console.error('Stack trace:', e.stack);
+        throw e;
+    }
+}
+
+function createBreakdownVisualization(rec, safeId) {
+    try {
+        console.log('createBreakdownVisualization for:', rec.researcher);
+        console.log('Full rec object:', rec);
+        
+        const breakdown = rec.breakdown || {};
+        console.log('Breakdown object:', breakdown);
+        
+        const maxScore = rec.score || 0;
+        console.log('Max score:', maxScore);
+        
+        // Calculate percentages
+        const themeScore = breakdown.theme_score || 0;
+        const keywordScore = breakdown.keyword_score || 0;
+        const contributionScore = breakdown.contribution_score || 0;
+        const recencyScore = breakdown.recency_score || 0;
+        
+        console.log('Theme Score:', themeScore, 'Keyword:', keywordScore, 'Contribution:', contributionScore, 'Recency:', recencyScore);
+        
+        const scores = [
+            { label: 'Theme Match', value: themeScore, color: '#4CAF50' },
+            { label: 'Keyword Match', value: keywordScore, color: '#2196F3' },
+            { label: 'Contribution', value: contributionScore, color: '#FF9800' },
+            { label: 'Recency Bonus', value: recencyScore, color: '#9C27B0' }
+        ];
+        
+        let html = `<div id="breakdown-${safeId}" style="display: none; margin-top: 15px; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">`;
+        html += `<h5 style="margin-top: 0;">${rec.researcher} - Score Breakdown</h5>`;
+        html += '<div style="display: flex; gap: 20px;">';
+        
+        // Bar chart visualization
+        html += '<div style="flex: 1;">';
+        html += '<strong>Score Components:</strong><br>';
+        
+        scores.forEach(item => {
+            const percentage = maxScore > 0 ? (item.value / maxScore) * 100 : 0;
+            const displayValue = item.value.toFixed(1);
+            
+            html += `<div style="margin: 10px 0;">
+                <div style="font-size: 12px; margin-bottom: 3px;">${item.label}: ${displayValue}</div>
+                <div style="width: 100%; height: 20px; background-color: #e0e0e0; border-radius: 3px; overflow: hidden;">
+                    <div style="height: 100%; width: ${percentage}%; background-color: ${item.color}; display: flex; align-items: center; padding: 0 5px; color: white; font-size: 11px; font-weight: bold;">
+                        ${percentage > 5 ? percentage.toFixed(0) + '%' : ''}
+                    </div>
+                </div>
+            </div>`;
+        });
+        
+        html += '</div>';
+        
+        // Summary stats
+        html += '<div style="flex: 0.5;">';
+        html += '<strong>Summary:</strong><br>';
+        html += `<div style="font-size: 14px; line-height: 1.8;">
+            <strong>Total Score:</strong> ${rec.score.toFixed(2)}<br>
+            <strong>Theme Proj:</strong> ${rec.theme_projects}<br>
+            <strong>Total Proj:</strong> ${rec.total_projects}<br>
+        </div>`;
+        html += '</div>';
+        
+        html += '</div>';
+        
+        // Related papers section
+        if (rec.related_papers && rec.related_papers.length > 0) {
+            html += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">';
+            html += '<strong style="display: block; margin-bottom: 8px;">Related Papers:</strong>';
+            html += '<ul style="margin: 8px 0; padding-left: 20px; font-size: 13px;">';
+            rec.related_papers.forEach(paper => {
+                html += `<li style="margin: 4px 0; line-height: 1.4;">${paper}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        html += '</div>';
+        
+        return html;
+    } catch(e) {
+        console.error('Error in createBreakdownVisualization:', e);
+        return '';
+    }
+}
+
+
+function updateSelectedAuthors() {
+    const selected = [];
+    document.querySelectorAll('.rec-checkbox:checked').forEach(checkbox => {
+        selected.push(checkbox.dataset.researcher);
+    });
+    document.getElementById('rec-authors-select').value = selected.join(', ');
+}
+
+document.getElementById('rec-select-all').addEventListener('change', function() {
+    const headerCheckbox = document.querySelector('.rec-checkbox-header');
+    if (headerCheckbox) {
+        headerCheckbox.checked = this.checked;
+        headerCheckbox.dispatchEvent(new Event('change'));
+    }
+});
+
+document.getElementById('accept-recommendation-btn').addEventListener('click', function() {
+    const code = document.getElementById('rec-code').value.trim();
+    const time = document.getElementById('rec-time').value.trim();
+    const authors = document.getElementById('rec-authors-select').value.trim();
+    
+    if (!code || !time) {
+        alert('Please enter Code and Time (Year).');
+        return;
+    }
+    
+    if (!authors) {
+        alert('Please select at least one researcher.');
+        return;
+    }
+    
+    if (!currentRecommendations) {
+        alert('No recommendations available.');
+        return;
+    }
+    
+    const theme = currentRecommendations.predicted_theme;
+    const title = document.getElementById('input-rec-title').value.trim();
+    
+    // Submit the project
+    $.ajax({
+        url: '/add_project',
+        type: 'POST',
+        data: {
+            code: code,
+            time: time,
+            theme: theme,
+            title: title,
+            authors: authors
+        },
+        success: function(response) {
+            document.getElementById('rec-status').textContent = 'Project added successfully!';
+            document.getElementById('rec-status').style.color = 'green';
+            
+            // Clear recommendation form
+            document.getElementById('input-rec-title').value = '';
+            document.getElementById('rec-code').value = '';
+            document.getElementById('rec-time').value = '';
+            document.getElementById('rec-authors-select').value = '';
+            document.getElementById('recommendations-display').style.display = 'none';
+            
+            // Reload data
+            setTimeout(function() {
+                d3.select('#research-list').selectAll('ul').remove();
+                loadAndDisplayResearch();
+            }, 500);
+        },
+        error: function(xhr, status, error) {
+            document.getElementById('rec-status').textContent = 'Error adding project';
+            document.getElementById('rec-status').style.color = 'red';
+            console.error('Error:', xhr.responseText);
+        }
+    });
+});
+
+// ========== MANUAL ENTRY ==========
+document.getElementById("add-project-form").addEventListener("submit", function(e) {
+    e.preventDefault();
+    
+    var code = document.getElementById("input-code").value.trim();
+    var time = document.getElementById("input-time").value.trim();
+    var theme = document.getElementById("input-theme").value.trim();
+    var title = document.getElementById("input-title").value.trim();
+    var authors = document.getElementById("input-authors").value.trim();
+    
+    // Validate inputs
+    if (!code || !time || !theme || !title || !authors) {
+        document.getElementById("add-project-status").textContent = "Please fill in all fields.";
+        document.getElementById("add-project-status").style.color = "red";
+        return;
+    }
+    
+    // Format the new row for TSV (matching the existing format with quotes)
+    var newRow = '"' + code + '"\t' + time + '\t"' + theme + '"\t\'' + title + '\'\t"' + authors + '"';
+    
+    // Send to server
+    $.ajax({
+        url: "/add_project",
+        type: "POST",
+        data: {
+            code: code,
+            time: time,
+            theme: theme,
+            title: title,
+            authors: authors
+        },
+        success: function(response) {
+            document.getElementById("add-project-status").textContent = "Project added successfully!";
+            document.getElementById("add-project-status").style.color = "green";
+            
+            // Clear form
+            document.getElementById("add-project-form").reset();
+            
+            // Reload research data after a short delay
+            setTimeout(function() {
+                // Clear the list
+                d3.select("#research-list").selectAll("ul").remove();
+                
+                // Reload data
+                loadAndDisplayResearch();
+                
+                // Clear status message
+                document.getElementById("add-project-status").textContent = "";
+            }, 500);
+        },
+        error: function(xhr, status, error) {
+            var errorMsg = "Error adding project: " + error;
+            if (xhr.responseText) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.error) {
+                        errorMsg = "Error: " + response.error;
+                    }
+                } catch(e) {}
+            }
+            document.getElementById("add-project-status").textContent = errorMsg;
+            document.getElementById("add-project-status").style.color = "red";
+            console.error("AJAX error:", xhr.status, status, error, xhr.responseText);
+        }
+    });
+});
+</script>
+
+</body>
