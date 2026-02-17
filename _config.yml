@@ -25,7 +25,7 @@ exclude:
   - .gitignore
   - __pycache__
   - model_artifacts
-  - *.pyc
+  - "*.pyc"
 
 # Include data files
 include:
