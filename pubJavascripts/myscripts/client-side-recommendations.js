@@ -33,12 +33,16 @@ const ClientSideRecommendations = (function() {
                 }
                 
                 // Load Pyodide from CDN
-                const pyodideURL = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/';
+                const pyodideURL = 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/';
                 pyodide = await loadPyodide({ indexURL: pyodideURL });
                 
-                // Install required packages
-                console.log('📦 Installing Python packages: numpy, scikit-learn, pandas...');
-                await pyodide.loadPackage(['numpy', 'scikit-learn', 'pandas']);
+                // Install required packages using micropip
+                console.log('📦 Installing Python packages...');
+                await pyodide.runPythonAsync(`
+import micropip
+await micropip.install(['numpy==1.24.3', 'scikit-learn==1.3.2'], keep_going=True)
+`);
+                console.log('📦 Packages installed');
                 
                 // Load the Python recommendation module code
                 const basePath = window.location.pathname.replace(/\/[^/]*$/, '/');
