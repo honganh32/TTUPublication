@@ -21,6 +21,17 @@ const ClientSideRecommendations = (function() {
             console.log('🐍 Initializing Pyodide (Python in browser)...');
             
             try {
+                // Wait for Pyodide to be available globally
+                let attempts = 0;
+                while (typeof loadPyodide === 'undefined' && attempts < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+                
+                if (typeof loadPyodide === 'undefined') {
+                    throw new Error('Pyodide failed to load from CDN. Check your internet connection.');
+                }
+                
                 // Load Pyodide from CDN
                 const pyodideURL = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/';
                 pyodide = await loadPyodide({ indexURL: pyodideURL });
@@ -195,12 +206,31 @@ engine = RecommendationEngine()
             console.log('📥 Loading ML models...');
             const result = await py.runPythonAsync(`
 import asyncio
-success = await engine.load_models_from_urls()
-success
+try:
+    success = await engine.load_models_from_urls()
+    success
+except Exception as e:
+    print(f"Error in load_models_from_urls: {e}")
+    False
 `);
             
             if (!result) {
-                throw new Error('Failed to load models from URLs');
+                console.warn('Models failed to load - checking paths...');
+                // Try to diagnose the issue
+                const diagResult = await py.runPythonAsync(`
+import js
+paths_to_check = [
+    'model_artifacts/tfidf_vectorizer.pkl',
+    'model_artifacts/logistic_model.pkl', 
+    'model_artifacts/label_encoder.pkl',
+    'data/grants_final.json'
+]
+for path in paths_to_check:
+    print(f"Checking {path}...")
+f"Model files should be at: {', '.join(paths_to_check)}"
+`);
+                console.warn(diagResult);
+                throw new Error('Failed to load model files. Check that model_artifacts/ folder exists with pickle files.');
             }
             
             // Also load grants data
@@ -210,7 +240,7 @@ success
 `);
             
             if (!grantsLoaded) {
-                throw new Error('Failed to load grants data');
+                throw new Error('Failed to load grants data from data/grants_final.json');
             }
             
             console.log('✅ All models loaded successfully');
@@ -228,29 +258,47 @@ success
         try {
             const py = await initialize();
             
+            if (!py) {
+                throw new Error('Pyodide not initialized. Please check your internet connection.');
+            }
+            
             // Predict theme
             const predictResult = await py.runPythonAsync(`
 import json
-theme, confidence = engine.predict_theme('${projectTitle.replace(/'/g, "\\'")}')
-json.dumps({'theme': theme, 'confidence': confidence})
+try:
+    theme, confidence = engine.predict_theme('${projectTitle.replace(/'/g, "\\'")}')
+    json.dumps({'theme': theme, 'confidence': confidence})
+except Exception as e:
+    json.dumps({'error': str(e)})
 `);
             
-            const { theme, confidence } = JSON.parse(predictResult);
+            const parsed = JSON.parse(predictResult);
+            if (parsed.error) {
+                throw new Error('Theme prediction failed: ' + parsed.error);
+            }
+            
+            const { theme, confidence } = parsed;
             
             // Get top researchers for this theme
             const recResult = await py.runPythonAsync(`
 import json
-recommendations = engine.score_researchers('${theme.replace(/'/g, "\\'")}', top_n=${topN})
-json.dumps(recommendations)
+try:
+    recommendations = engine.score_researchers('${theme.replace(/'/g, "\\'")}', top_n=${topN})
+    json.dumps(recommendations)
+except Exception as e:
+    json.dumps({'error': str(e)})
 `);
             
-            const recommendations = JSON.parse(recResult);
+            const recs = JSON.parse(recResult);
+            if (recs.error) {
+                throw new Error('Researcher scoring failed: ' + recs.error);
+            }
             
             return {
                 project_title: projectTitle,
                 predicted_theme: theme,
                 theme_confidence: confidence,
-                recommendations: recommendations,
+                recommendations: Array.isArray(recs) ? recs : [],
                 source: 'client-side-ml'
             };
             
@@ -286,15 +334,19 @@ document.addEventListener('DOMContentLoaded', async function() {
         const available = await ClientSideRecommendations.isAvailable();
         if (available) {
             console.log('🐍 Pyodide available - loading ML models...');
-            ClientSideRecommendations.loadModels().then(() => {
-                console.log('✅ ML models ready for recommendations');
-            }).catch(err => {
-                console.warn('⚠ Could not load ML models:', err.message);
-            });
+            console.log('⏳ This may take 30-60 seconds on first load (models are cached afterward)');
+            ClientSideRecommendations.loadModels()
+                .then(() => {
+                    console.log('✅ ML models ready for recommendations');
+                })
+                .catch(err => {
+                    console.error('❌ Could not load ML models:', err.message);
+                    console.error('Full error:', err);
+                });
         } else {
-            console.warn('⚠ Pyodide not available');
+            console.error('❌ Pyodide not available - AI recommendations will not work');
         }
     } catch (error) {
-        console.warn('⚠ Client-side ML initialization skipped');
+        console.error('❌ Client-side ML initialization failed:', error);
     }
 });
