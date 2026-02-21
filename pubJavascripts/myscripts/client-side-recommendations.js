@@ -36,6 +36,10 @@ const ClientSideRecommendations = (function() {
                 const pyodideURL = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/';
                 pyodide = await loadPyodide({ indexURL: pyodideURL });
                 
+                // Load micropip first
+                console.log('📦 Loading package manager...');
+                await pyodide.loadPackage(['micropip']);
+                
                 // Install required packages using micropip
                 console.log('📦 Installing Python packages...');
                 await pyodide.runPythonAsync(`
