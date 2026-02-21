@@ -41,14 +41,19 @@ const ClientSideRecommendations = (function() {
                 await pyodide.loadPackage(['numpy', 'scikit-learn', 'pandas']);
                 
                 // Load the Python recommendation module code
+                const basePath = window.location.pathname.replace(/\/[^/]*$/, '/');
+                console.log('🔧 Base path for model loading:', basePath);
+                
                 await pyodide.runPythonAsync(`
 import pickle
 import json
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
-from io import BytesIO
 import base64
+
+# Pass base path from JavaScript
+base_path = '${basePath}'
 
 class RecommendationEngine:
     def __init__(self):
@@ -56,42 +61,57 @@ class RecommendationEngine:
         self.model = None
         self.label_encoder = None
         self.grants_data = None
+        self.base_path = base_path
         
     async def load_models_from_urls(self):
         '''Load models from GitHub Pages paths'''
         import js
         
+        print(f"[*] Using base path: {self.base_path}")
+        
         try:
             # Load TF-IDF vectorizer
-            print("[*] Loading TF-IDF vectorizer...")
-            resp = await js.fetch('model_artifacts/tfidf_vectorizer.pkl')
+            url = f"{self.base_path}model_artifacts/tfidf_vectorizer.pkl"
+            print(f"[*] Fetching: {url}")
+            resp = await js.fetch(url)
             if not resp.ok:
-                raise Exception(f"Failed to load tfidf_vectorizer: {resp.status}")
+                print(f"[ERROR] Status {resp.status} fetching {url}")
+                raise Exception(f"HTTP {resp.status} - file not found or access denied")
             vec_data = await resp.arrayBuffer()
+            print(f"[*] Received {len(vec_data)} bytes")
             self.vectorizer = pickle.loads(bytes(vec_data))
             print("[✓] Vectorizer loaded")
             
             # Load logistic model
-            print("[*] Loading logistic regression model...")
-            resp = await js.fetch('model_artifacts/logistic_model.pkl')
+            url = f"{self.base_path}model_artifacts/logistic_model.pkl"
+            print(f"[*] Fetching: {url}")
+            resp = await js.fetch(url)
             if not resp.ok:
-                raise Exception(f"Failed to load logistic_model: {resp.status}")
+                print(f"[ERROR] Status {resp.status} fetching {url}")
+                raise Exception(f"HTTP {resp.status} - file not found or access denied")
             model_data = await resp.arrayBuffer()
+            print(f"[*] Received {len(model_data)} bytes")
             self.model = pickle.loads(bytes(model_data))
             print("[✓] Model loaded")
             
             # Load label encoder
-            print("[*] Loading label encoder...")
-            resp = await js.fetch('model_artifacts/label_encoder.pkl')
+            url = f"{self.base_path}model_artifacts/label_encoder.pkl"
+            print(f"[*] Fetching: {url}")
+            resp = await js.fetch(url)
             if not resp.ok:
-                raise Exception(f"Failed to load label_encoder: {resp.status}")
+                print(f"[ERROR] Status {resp.status} fetching {url}")
+                raise Exception(f"HTTP {resp.status} - file not found or access denied")
             encoder_data = await resp.arrayBuffer()
+            print(f"[*] Received {len(encoder_data)} bytes")
             self.label_encoder = pickle.loads(bytes(encoder_data))
             print("[✓] Label encoder loaded")
             
+            print("[✓] All models loaded successfully!")
             return True
         except Exception as e:
-            print(f"[ERROR] Failed to load models: {e}")
+            print(f"[ERROR] Model loading failed: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     async def load_grants_data(self):
@@ -99,16 +119,20 @@ class RecommendationEngine:
         import js
         
         try:
-            print("[*] Loading grants data...")
-            resp = await js.fetch('data/grants_final.json')
+            url = f"{self.base_path}data/grants_final.json"
+            print(f"[*] Loading grants data from {url}...")
+            resp = await js.fetch(url)
             if not resp.ok:
-                raise Exception(f"Failed to load grants data: {resp.status}")
+                print(f"[ERROR] Status {resp.status}")
+                raise Exception(f"HTTP {resp.status}")
             data = await resp.json()
             self.grants_data = data
             print(f"[✓] Loaded {len(data)} grants")
             return True
         except Exception as e:
             print(f"[ERROR] Failed to load grants data: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def predict_theme(self, project_title):
@@ -203,37 +227,26 @@ engine = RecommendationEngine()
         const py = await initialize();
         
         try {
-            console.log('📥 Loading ML models...');
+            console.log('📥 Loading ML models from model_artifacts/...');
             const result = await py.runPythonAsync(`
 import asyncio
 try:
     success = await engine.load_models_from_urls()
     success
 except Exception as e:
+    import traceback
     print(f"Error in load_models_from_urls: {e}")
+    traceback.print_exc()
     False
 `);
             
             if (!result) {
-                console.warn('Models failed to load - checking paths...');
-                // Try to diagnose the issue
-                const diagResult = await py.runPythonAsync(`
-import js
-paths_to_check = [
-    'model_artifacts/tfidf_vectorizer.pkl',
-    'model_artifacts/logistic_model.pkl', 
-    'model_artifacts/label_encoder.pkl',
-    'data/grants_final.json'
-]
-for path in paths_to_check:
-    print(f"Checking {path}...")
-f"Model files should be at: {', '.join(paths_to_check)}"
-`);
-                console.warn(diagResult);
-                throw new Error('Failed to load model files. Check that model_artifacts/ folder exists with pickle files.');
+                console.error('❌ Models failed to load - check console output above for details');
+                throw new Error('Failed to load model files from model_artifacts/. Check browser console for details.');
             }
             
             // Also load grants data
+            console.log('📥 Loading grants data from data/grants_final.json...');
             const grantsLoaded = await py.runPythonAsync(`
 success = await engine.load_grants_data()
 success
@@ -246,7 +259,7 @@ success
             console.log('✅ All models loaded successfully');
             return true;
         } catch (error) {
-            console.error('Error loading models:', error);
+            console.error('❌ Error loading models:', error);
             throw error;
         }
     }
