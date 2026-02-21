@@ -24,12 +24,12 @@ exclude:
   - recommend_researchers.py
   - .gitignore
   - __pycache__
-  - model_artifacts
   - "*.pyc"
 
-# Include data files
+# Include data and model files
 include:
   - data/
+  - model_artifacts/
 
 # Enable markdown support
 markdown: kramdown

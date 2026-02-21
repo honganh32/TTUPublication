@@ -12,6 +12,7 @@
 <script src="pubJavascripts/myscripts/sliderRadius.js"></script>
 <script src="pubJavascripts/myscripts/streamGraph.js"></script>
 <script src="pubJavascripts/myscripts/data-loader.js"></script>
+<script src="pubJavascripts/myscripts/client-side-recommendations.js"></script>
 <script src="pubJavascripts/myscripts/main.js"></script>
 
 <script type='text/javascript' src="https://code.jquery.com/ui/1.11.0/jquery-ui.min.js"> </script>
@@ -25,11 +26,12 @@
     <label style="margin-right: 20px;">
         <input type="radio" name="input-mode" value="manual" checked> Manual Entry
     </label>
-    <label style="opacity: 0.5; cursor: not-allowed;" title="Requires local Python server">
-        <input type="radio" name="input-mode" value="recommendation" disabled> AI Recommendation (server required)
+    <label>
+        <input type="radio" name="input-mode" value="recommendation"> AI Recommendation (Pre-computed)
     </label>
     <div style="font-size: 12px; color: #666; margin-top: 8px;">
-        <strong>GitHub Pages Mode:</strong> Running static version. For AI recommendations, use local server: <code>python server.py</code>
+        <strong>GitHub Pages Mode:</strong> AI recommendations computed on-demand using client-side ML (Pyodide)
+        <span id="ml-status" style="margin-left: 10px;"></span>
     </div>
 </div>
 
@@ -156,6 +158,29 @@ async function loadAndDisplayResearch() {
 // Load initial research data
 loadAndDisplayResearch();
 
+// Initialize ML models for client-side recommendations
+(async function() {
+    try {
+        const mlStatus = document.getElementById('ml-status');
+        mlStatus.textContent = '🔄 Loading ML models...';
+        mlStatus.style.color = '#ff6600';
+        
+        // Wait for models to load
+        await ClientSideRecommendations.loadModels();
+        
+        // Update status on success
+        mlStatus.textContent = '✅ ML ready';
+        mlStatus.style.color = 'green';
+        mlStatus.title = 'Client-side ML models loaded. Recommendations are computed in your browser!';
+    } catch (error) {
+        const mlStatus = document.getElementById('ml-status');
+        mlStatus.textContent = '⚠️ ML unavailable';
+        mlStatus.style.color = 'orange';
+        mlStatus.title = error.message;
+        console.warn('ML models not available:', error.message);
+    }
+})();
+
 // ========== MODE SWITCHING ==========
 document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
     radio.addEventListener('change', function() {
@@ -179,7 +204,7 @@ document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
 // ========== RECOMMENDATION SYSTEM ==========
 let currentRecommendations = null;
 
-document.getElementById('get-recommendations-btn').addEventListener('click', function() {
+document.getElementById('get-recommendations-btn').addEventListener('click', async function() {
     const projectTitle = document.getElementById('input-rec-title').value.trim();
     const statusEl = document.getElementById('rec-status');
     
@@ -189,13 +214,31 @@ document.getElementById('get-recommendations-btn').addEventListener('click', fun
         return;
     }
     
-    statusEl.textContent = 'Loading recommendations...';
+    statusEl.textContent = 'Computing recommendations...';
     statusEl.style.color = 'blue';
     
-    // GitHub Pages doesn't support the recommendation server
-    statusEl.textContent = 'AI Recommendation feature requires local Python server. Use: python server.py';
-    statusEl.style.color = 'red';
-    alert('AI Recommendation feature is not available on GitHub Pages.\n\nFor local development with recommendations:\n1. python server.py\n2. Open http://localhost:8000\n\nFor GitHub Pages, only Manual Entry mode is available.');
+    try {
+        // Use client-side ML engine
+        const response = await ClientSideRecommendations.getRecommendations(projectTitle, 5);
+        
+        statusEl.textContent = 'Recommendations computed!';
+        statusEl.style.color = 'green';
+        
+        currentRecommendations = response;
+        try {
+            displayRecommendations(response);
+            document.getElementById('recommendations-display').style.display = 'block';
+        } catch(e) {
+            console.error('Error displaying recommendations:', e);
+            statusEl.textContent = 'Error displaying recommendations: ' + e.message;
+            statusEl.style.color = 'red';
+        }
+    } catch(error) {
+        statusEl.textContent = 'Error: ' + error.message;
+        statusEl.style.color = 'red';
+        console.error('Recommendation error:', error);
+        alert('Error computing recommendations: ' + error.message);
+    }
 });
 
 function displayRecommendations(response) {
