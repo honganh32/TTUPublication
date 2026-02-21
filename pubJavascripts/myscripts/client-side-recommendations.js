@@ -33,14 +33,14 @@ const ClientSideRecommendations = (function() {
                 }
                 
                 // Load Pyodide from CDN
-                const pyodideURL = 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/';
+                const pyodideURL = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/';
                 pyodide = await loadPyodide({ indexURL: pyodideURL });
                 
                 // Install required packages using micropip
                 console.log('📦 Installing Python packages...');
                 await pyodide.runPythonAsync(`
 import micropip
-await micropip.install(['numpy==1.24.3', 'scikit-learn==1.3.2'], keep_going=True)
+await micropip.install(['numpy', 'scikit-learn'], keep_going=True)
 `);
                 console.log('📦 Packages installed');
                 
@@ -51,13 +51,22 @@ await micropip.install(['numpy==1.24.3', 'scikit-learn==1.3.2'], keep_going=True
                 await pyodide.runPythonAsync(`
 import pickle
 import json
-import numpy as np
+import sys
+
+# Handle numpy._core import compatibility
+try:
+    import numpy as np
+except ImportError:
+    import importlib
+    sys.modules['numpy._core'] = __import__('numpy')
+    import numpy as np
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 import base64
 
 # Pass base path from JavaScript
-base_path = '${basePath}'
+base_path = '${basePath}')
 
 class RecommendationEngine:
     def __init__(self):
