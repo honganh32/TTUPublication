@@ -73,16 +73,18 @@ const RecommendationEngine = (function() {
         }
         
         try {
-            // Get input name from the model
+            // Get input/output names from the model
             const inputs = tfidfSession.inputNames;
             const inputName = inputs[0];
             
-            // Prepare input as a 1D string array
-            const input = new ort.Tensor('string', [text], [1]);
+            // Create 2D string tensor [1, 1] as expected by the model
+            const input = new ort.Tensor('string', [[text]], [1, 1]);
             
             // Create input object with the correct key
             const inputObj = {};
             inputObj[inputName] = input;
+            
+            console.log('TF-IDF Input:', { inputName, shape: [1, 1], text });
             
             // Run inference
             const results = await tfidfSession.run(inputObj);
@@ -91,6 +93,8 @@ const RecommendationEngine = (function() {
             const outputs = tfidfSession.outputNames;
             const outputName = outputs[0];
             const features = results[outputName].data;
+            
+            console.log('TF-IDF Output:', { outputName, featureCount: features.length });
             
             return Array.from(features);
         } catch (error) {
@@ -113,20 +117,47 @@ const RecommendationEngine = (function() {
             const inputs = session.inputNames;
             const inputName = inputs[0];
             
-            // 3. Create input tensor
+            // 3. Create input tensor with correct shape [1, features.length]
             const input = new ort.Tensor('float32', features, [1, features.length]);
             
             // 4. Create input object with the correct key
             const inputObj = {};
             inputObj[inputName] = input;
             
+            console.log('Logistic Regression Input:', { 
+                inputName, 
+                shape: [1, features.length], 
+                featureCount: features.length 
+            });
+            
             // 5. Run logistic regression model
             const results = await session.run(inputObj);
             
             // 6. Get predicted probabilities
             const outputs = session.outputNames;
-            const outputName = outputs[0];
-            const probabilities = results[outputName].data;
+            
+            // Find the probability/class output (usually contains 'probabilities' or 'output')
+            let probabilityOutput = null;
+            for (const outputName of outputs) {
+                if (outputName.toLowerCase().includes('prob') || 
+                    outputName.toLowerCase().includes('output') ||
+                    outputName.toLowerCase().includes('class')) {
+                    probabilityOutput = outputName;
+                    break;
+                }
+            }
+            
+            // Default to first output if no match found
+            if (!probabilityOutput) {
+                probabilityOutput = outputs[0];
+            }
+            
+            const probabilities = results[probabilityOutput].data;
+            
+            console.log('Logistic Regression Output:', { 
+                outputName: probabilityOutput, 
+                classCount: probabilities.length 
+            });
             
             // 7. Get predicted class index and class name
             let maxProb = 0;
@@ -141,6 +172,12 @@ const RecommendationEngine = (function() {
             
             const predictedTheme = labelEncoder.classes[predictedIdx];
             const confidence = (maxProb * 100).toFixed(1);
+            
+            console.log('Prediction Result:', { 
+                theme: predictedTheme, 
+                confidence: confidence + '%',
+                classIndex: predictedIdx 
+            });
             
             return {
                 theme: predictedTheme,
