@@ -63,7 +63,7 @@ from sklearn.preprocessing import LabelEncoder
 import base64
 
 # Pass base path from JavaScript
-base_path = '${basePath}')
+base_path = '${basePath}'
 
 class RecommendationEngine:
     def __init__(self):
