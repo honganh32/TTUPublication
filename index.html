@@ -6,14 +6,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
 <script src="pubJavascripts/javascripts/d3.v3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.6.3/d3-tip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.all.min.js"></script>
 <script src="pubJavascripts/javascripts/fisheye.js"></script>
 <script src="pubJavascripts/myscripts/util.js"></script>
 <script src="pubJavascripts/myscripts/sliderRelationship.js"></script>
 <script src="pubJavascripts/myscripts/sliderRadius.js"></script>
 <script src="pubJavascripts/myscripts/streamGraph.js"></script>
 <script src="pubJavascripts/myscripts/data-loader.js"></script>
-<script src="pubJavascripts/myscripts/client-side-recommendations.js"></script>
+<script src="pubJavascripts/myscripts/recommendation-engine.js"></script>
+<script src="pubJavascripts/myscripts/precomputed-recommendations.js"></script>
 <script src="pubJavascripts/myscripts/main.js"></script>
 
 <script type='text/javascript' src="https://code.jquery.com/ui/1.11.0/jquery-ui.min.js"> </script>
@@ -28,11 +29,10 @@
         <input type="radio" name="input-mode" value="manual" checked> Manual Entry
     </label>
     <label>
-        <input type="radio" name="input-mode" value="recommendation"> AI Recommendation (Pre-computed)
+        <input type="radio" name="input-mode" value="recommendation"> AI Recommendation (Real-time)
     </label>
     <div style="font-size: 12px; color: #666; margin-top: 8px;">
-        <strong>GitHub Pages Mode:</strong> AI recommendations computed on-demand using client-side ML (Pyodide)
-        <span id="ml-status" style="margin-left: 10px;"></span>
+        <strong>GitHub Pages Mode:</strong> Uses ONNX ML models in browser (real-time) or falls back to pre-computed recommendations
     </div>
 </div>
 
@@ -159,29 +159,6 @@ async function loadAndDisplayResearch() {
 // Load initial research data
 loadAndDisplayResearch();
 
-// Initialize ML models for client-side recommendations
-(async function() {
-    try {
-        const mlStatus = document.getElementById('ml-status');
-        mlStatus.textContent = '🔄 Loading ML models...';
-        mlStatus.style.color = '#ff6600';
-        
-        // Wait for models to load
-        await ClientSideRecommendations.loadModels();
-        
-        // Update status on success
-        mlStatus.textContent = '✅ ML ready';
-        mlStatus.style.color = 'green';
-        mlStatus.title = 'Client-side ML models loaded. Recommendations are computed in your browser!';
-    } catch (error) {
-        const mlStatus = document.getElementById('ml-status');
-        mlStatus.textContent = '⚠️ ML unavailable';
-        mlStatus.style.color = 'orange';
-        mlStatus.title = error.message;
-        console.warn('ML models not available:', error.message);
-    }
-})();
-
 // ========== MODE SWITCHING ==========
 document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
     radio.addEventListener('change', function() {
@@ -219,10 +196,37 @@ document.getElementById('get-recommendations-btn').addEventListener('click', asy
     statusEl.style.color = 'blue';
     
     try {
-        // Use client-side ML engine
-        const response = await ClientSideRecommendations.getRecommendations(projectTitle, 5);
+        // Try to use ONNX models (real-time compute) first
+        let response = null;
         
-        statusEl.textContent = 'Recommendations computed!';
+        if (RecommendationEngine && typeof RecommendationEngine.isAvailable === 'function') {
+            const hasModels = await RecommendationEngine.isAvailable();
+            if (hasModels) {
+                try {
+                    // Load grants data
+                    const grantsData = await DataManager.getAllProjects();
+                    
+                    // Get recommendations using ONNX models
+                    response = await RecommendationEngine.getRecommendations(projectTitle, grantsData, 5);
+                    statusEl.textContent = 'Recommendations computed! (Real-time)';
+                } catch (onnxError) {
+                    console.warn('ONNX computation failed, trying precomputed...', onnxError);
+                    // Fall through to precomputed
+                    response = null;
+                }
+            }
+        }
+        
+        // Fall back to precomputed recommendations
+        if (!response && PrecomputedRecommendations) {
+            response = await PrecomputedRecommendations.getRecommendations(projectTitle, 5);
+            statusEl.textContent = 'Recommendations loaded! (Pre-computed)';
+        }
+        
+        if (!response) {
+            throw new Error('No recommendation system available');
+        }
+        
         statusEl.style.color = 'green';
         
         currentRecommendations = response;
@@ -238,7 +242,6 @@ document.getElementById('get-recommendations-btn').addEventListener('click', asy
         statusEl.textContent = 'Error: ' + error.message;
         statusEl.style.color = 'red';
         console.error('Recommendation error:', error);
-        alert('Error computing recommendations: ' + error.message);
     }
 });
 

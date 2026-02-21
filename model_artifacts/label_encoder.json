@@ -1,0 +1,26 @@
+{
+  "classes": [
+    "AI / Machine Learning",
+    "Algorithms / Theory / Optimization",
+    "Cybersecurity",
+    "Data / Metadata / Scientific Data",
+    "Education & Workforce Development",
+    "Energy / Environment",
+    "Environment & Agriculture",
+    "Healthcare / Biomedical",
+    "Quantum",
+    "Software / Systems"
+  ],
+  "class_indices": {
+    "AI / Machine Learning": 0,
+    "Algorithms / Theory / Optimization": 1,
+    "Cybersecurity": 2,
+    "Data / Metadata / Scientific Data": 3,
+    "Education & Workforce Development": 4,
+    "Energy / Environment": 5,
+    "Environment & Agriculture": 6,
+    "Healthcare / Biomedical": 7,
+    "Quantum": 8,
+    "Software / Systems": 9
+  }
+}
