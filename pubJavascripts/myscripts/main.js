@@ -93,6 +93,20 @@ var yScale;
 var linkScale;
 var searchTerm ="";
 
+// Safe scale calculation to prevent NaN values
+function safeXScale(value) {
+    if (value === null || value === undefined) {
+        return 0;
+    }
+    var result = xScale(value);
+    if (isNaN(result)) {
+        // Fallback to numeric scale if time scale fails
+        var percent = (value - minYear) / (maxYear - minYear);
+        return Math.max(0, percent * (width - 100) / numYear);
+    }
+    return result;
+}
+
 
  var nodes2 = [];
  var links2 = [];
@@ -845,9 +859,9 @@ node2.append("title")
         linePNodes = svg.selectAll(".linePNodes")
             .data(pNodes).enter().append("line")
             .attr("class", "linePNodes")
-            .attr("x1", function(d) {return xStep+xScale(d.minY);})
+            .attr("x1", function(d) {return xStep+safeXScale(d.minY);})
             .attr("y1", function(d) {return d.y;})
-            .attr("x2", function(d) {return xStep+xScale(d.maxY);})
+            .attr("x2", function(d) {return xStep+safeXScale(d.maxY);})
             .attr("y2", function(d) {return d.y;})
             .style("stroke-dasharray", ("1, 1"))
             .style("stroke-width",0.4)
@@ -1267,14 +1281,14 @@ function mouseouted(d) {
            }
             d.minY = minY;
             d.maxY = maxY;
-            d.xConnected = xStep+xScale(minY);
+            d.xConnected = xStep+safeXScale(minY);
            return "translate(" +d.xConnected + "," + d.y + ")"
         })
         
         svg.selectAll(".linePNodes").transition().duration(durationTime)
-            .attr("x1", function(d) {return xStep+xScale(d.minY);})
+            .attr("x1", function(d) {return xStep+safeXScale(d.minY);})
             .attr("y1", function(d) {return d.y;})
-            .attr("x2", function(d) {return xStep+xScale(d.maxY);})
+            .attr("x2", function(d) {return xStep+safeXScale(d.maxY);})
             .attr("y2", function(d) {return d.y;}); 
 
        // svg.selectAll(".timeLegend").transition().duration(durationTime)
