@@ -73,15 +73,24 @@ const RecommendationEngine = (function() {
         }
         
         try {
-            // Prepare input
-            const input = new ort.Tensor('string', [[text]], [1, 1]);
+            // Get input name from the model
+            const inputs = tfidfSession.inputNames;
+            const inputName = inputs[0];
+            
+            // Prepare input as a 1D string array
+            const input = new ort.Tensor('string', [text], [1]);
+            
+            // Create input object with the correct key
+            const inputObj = {};
+            inputObj[inputName] = input;
             
             // Run inference
-            const results = await tfidfSession.run({ string_input: input });
+            const results = await tfidfSession.run(inputObj);
             
-            // Extract output features
-            const outputKey = Object.keys(results)[0];
-            const features = results[outputKey].data;
+            // Extract output features (get first output)
+            const outputs = tfidfSession.outputNames;
+            const outputName = outputs[0];
+            const features = results[outputName].data;
             
             return Array.from(features);
         } catch (error) {
@@ -100,17 +109,26 @@ const RecommendationEngine = (function() {
             // 1. Vectorize the input text
             const features = await vectorizeText(projectTitle);
             
-            // 2. Create input tensor
+            // 2. Get input name from the model
+            const inputs = session.inputNames;
+            const inputName = inputs[0];
+            
+            // 3. Create input tensor
             const input = new ort.Tensor('float32', features, [1, features.length]);
             
-            // 3. Run logistic regression model
-            const results = await session.run({ float_input: input });
+            // 4. Create input object with the correct key
+            const inputObj = {};
+            inputObj[inputName] = input;
             
-            // 4. Get predicted probabilities
-            const outputKey = Object.keys(results)[0];
-            const probabilities = results[outputKey].data;
+            // 5. Run logistic regression model
+            const results = await session.run(inputObj);
             
-            // 5. Get predicted class index and class name
+            // 6. Get predicted probabilities
+            const outputs = session.outputNames;
+            const outputName = outputs[0];
+            const probabilities = results[outputName].data;
+            
+            // 7. Get predicted class index and class name
             let maxProb = 0;
             let predictedIdx = 0;
             
