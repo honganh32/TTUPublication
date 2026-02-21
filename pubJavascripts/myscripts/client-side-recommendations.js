@@ -66,44 +66,45 @@ class RecommendationEngine:
     async def load_models_from_urls(self):
         '''Load models from GitHub Pages paths'''
         import js
+        from pyodide.http import pyfetch
         
         print(f"[*] Using base path: {self.base_path}")
         
         try:
-            # Load TF-IDF vectorizer
+            # Load TF-IDF vectorizer using pyfetch
             url = f"{self.base_path}model_artifacts/tfidf_vectorizer.pkl"
             print(f"[*] Fetching: {url}")
-            resp = await js.fetch(url)
-            if not resp.ok:
-                print(f"[ERROR] Status {resp.status} fetching {url}")
-                raise Exception(f"HTTP {resp.status} - file not found or access denied")
-            vec_data = await resp.arrayBuffer()
-            print(f"[*] Received {len(vec_data)} bytes")
-            self.vectorizer = pickle.loads(bytes(vec_data))
+            response = await pyfetch(url)
+            if not response.ok:
+                print(f"[ERROR] Status {response.status}")
+                raise Exception(f"HTTP {response.status}")
+            vec_bytes = await response.bytes()
+            print(f"[*] Received {len(vec_bytes)} bytes")
+            self.vectorizer = pickle.loads(vec_bytes)
             print("[✓] Vectorizer loaded")
             
             # Load logistic model
             url = f"{self.base_path}model_artifacts/logistic_model.pkl"
             print(f"[*] Fetching: {url}")
-            resp = await js.fetch(url)
-            if not resp.ok:
-                print(f"[ERROR] Status {resp.status} fetching {url}")
-                raise Exception(f"HTTP {resp.status} - file not found or access denied")
-            model_data = await resp.arrayBuffer()
-            print(f"[*] Received {len(model_data)} bytes")
-            self.model = pickle.loads(bytes(model_data))
+            response = await pyfetch(url)
+            if not response.ok:
+                print(f"[ERROR] Status {response.status}")
+                raise Exception(f"HTTP {response.status}")
+            model_bytes = await response.bytes()
+            print(f"[*] Received {len(model_bytes)} bytes")
+            self.model = pickle.loads(model_bytes)
             print("[✓] Model loaded")
             
             # Load label encoder
             url = f"{self.base_path}model_artifacts/label_encoder.pkl"
             print(f"[*] Fetching: {url}")
-            resp = await js.fetch(url)
-            if not resp.ok:
-                print(f"[ERROR] Status {resp.status} fetching {url}")
-                raise Exception(f"HTTP {resp.status} - file not found or access denied")
-            encoder_data = await resp.arrayBuffer()
-            print(f"[*] Received {len(encoder_data)} bytes")
-            self.label_encoder = pickle.loads(bytes(encoder_data))
+            response = await pyfetch(url)
+            if not response.ok:
+                print(f"[ERROR] Status {response.status}")
+                raise Exception(f"HTTP {response.status}")
+            encoder_bytes = await response.bytes()
+            print(f"[*] Received {len(encoder_bytes)} bytes")
+            self.label_encoder = pickle.loads(encoder_bytes)
             print("[✓] Label encoder loaded")
             
             print("[✓] All models loaded successfully!")
@@ -116,16 +117,17 @@ class RecommendationEngine:
     
     async def load_grants_data(self):
         '''Load grants data from JSON'''
-        import js
+        from pyodide.http import pyfetch
         
         try:
             url = f"{self.base_path}data/grants_final.json"
             print(f"[*] Loading grants data from {url}...")
-            resp = await js.fetch(url)
-            if not resp.ok:
-                print(f"[ERROR] Status {resp.status}")
-                raise Exception(f"HTTP {resp.status}")
-            data = await resp.json()
+            response = await pyfetch(url)
+            if not response.ok:
+                print(f"[ERROR] Status {response.status}")
+                raise Exception(f"HTTP {response.status}")
+            import json
+            data = await response.json()
             self.grants_data = data
             print(f"[✓] Loaded {len(data)} grants")
             return True
