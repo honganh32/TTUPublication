@@ -134,31 +134,55 @@ const RecommendationEngine = (function() {
             // 5. Run logistic regression model
             const results = await session.run(inputObj);
             
-            // 6. Get all available outputs
+            // 6. Safely iterate through outputs
             const outputs = session.outputNames;
-            console.log('Available outputs:', outputs);
+            console.log('Model output names:', outputs);
+            
+            // Get output details without crashing
+            const outputDetails = {};
+            for (const name of outputs) {
+                try {
+                    const outputValue = results[name];
+                    outputDetails[name] = {
+                        hasData: !!outputValue.data,
+                        type: outputValue.type,
+                        dims: outputValue.dims
+                    };
+                } catch (e) {
+                    outputDetails[name] = { error: e.message };
+                }
+            }
+            console.log('Output details:', outputDetails);
             
             // Find the probabilities output (usually the first tensor output that's float32)
             let probabilities = null;
             let probabilityOutputName = null;
             
             for (const outputName of outputs) {
-                const output = results[outputName];
-                console.log(`Output "${outputName}":`, { 
-                    type: output.type,
-                    dims: output.dims
-                });
-                
-                // Look for float32 tensor with correct dimensions
-                if (output.type === 'float32' && output.dims && output.dims.length === 2) {
-                    probabilities = output.data;
-                    probabilityOutputName = outputName;
-                    break;
+                try {
+                    const output = results[outputName];
+                    
+                    // Check if output is a tensor (has data property)
+                    if (output && output.data) {
+                        console.log(`Output "${outputName}": type=${output.type}, dims=${JSON.stringify(output.dims)}, size=${output.data.length}`);
+                        
+                        // Use the first float32 tensor output with 10+ elements (class probabilities)
+                        if (output.type === 'float32' && output.data.length >= 10) {
+                            probabilities = output.data;
+                            probabilityOutputName = outputName;
+                            console.log(`✓ Using output "${outputName}" as probabilities`);
+                            break;
+                        }
+                    } else {
+                        console.log(`Output "${outputName}": skipped (not a tensor)`);
+                    }
+                } catch (e) {
+                    console.log(`Output "${outputName}": error -`, e.message);
                 }
             }
             
             if (!probabilities) {
-                throw new Error('Could not find probability output in model results');
+                throw new Error('Could not find probability output in model results. Check console for available outputs.');
             }
             
             console.log('Using output:', { 

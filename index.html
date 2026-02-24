@@ -199,32 +199,53 @@ document.getElementById('get-recommendations-btn').addEventListener('click', asy
         // Try to use ONNX models (real-time compute) first
         let response = null;
         
-        if (RecommendationEngine && typeof RecommendationEngine.isAvailable === 'function') {
-            const hasModels = await RecommendationEngine.isAvailable();
-            if (hasModels) {
-                try {
-                    // Load grants data
-                    const grantsData = await DataManager.getAllProjects();
-                    
-                    // Get recommendations using ONNX models
-                    response = await RecommendationEngine.getRecommendations(projectTitle, grantsData, 5);
-                    statusEl.textContent = 'Recommendations computed! (Real-time)';
-                } catch (onnxError) {
-                    console.warn('ONNX computation failed, trying precomputed...', onnxError);
-                    // Fall through to precomputed
-                    response = null;
+        if (typeof RecommendationEngine !== 'undefined' && RecommendationEngine && typeof RecommendationEngine.isAvailable === 'function') {
+            try {
+                const hasModels = await RecommendationEngine.isAvailable();
+                console.log('RecommendationEngine.isAvailable():', hasModels);
+                
+                if (hasModels) {
+                    try {
+                        // Load grants data
+                        const grantsData = await DataManager.getAllProjects();
+                        console.log('Loaded grants data, count:', grantsData.length);
+                        
+                        // Get recommendations using ONNX models
+                        console.log('Getting ONNX recommendations for:', projectTitle);
+                        response = await RecommendationEngine.getRecommendations(projectTitle, grantsData, 5);
+                        console.log('ONNX recommendation succeeded:', response);
+                        statusEl.textContent = 'Recommendations computed! (Real-time)';
+                    } catch (onnxError) {
+                        console.error('ONNX computation failed:', onnxError.message);
+                        console.error('Full error:', onnxError);
+                        console.warn('Trying precomputed fallback...');
+                        // Fall through to precomputed
+                        response = null;
+                    }
+                } else {
+                    console.log('ONNX models not available');
                 }
+            } catch (checkError) {
+                console.error('Error checking RecommendationEngine availability:', checkError);
             }
+        } else {
+            console.log('RecommendationEngine not loaded');
         }
         
         // Fall back to precomputed recommendations
-        if (!response && PrecomputedRecommendations) {
-            response = await PrecomputedRecommendations.getRecommendations(projectTitle, 5);
-            statusEl.textContent = 'Recommendations loaded! (Pre-computed)';
-        }
-        
-        if (!response) {
-            throw new Error('No recommendation system available');
+        if (!response && typeof PrecomputedRecommendations !== 'undefined' && PrecomputedRecommendations) {
+            try {
+                console.log('Getting precomputed recommendations for:', projectTitle);
+                response = await PrecomputedRecommendations.getRecommendations(projectTitle, 5);
+                console.log('Precomputed recommendation succeeded:', response);
+                statusEl.textContent = 'Recommendations loaded! (Pre-computed)';
+            } catch (preError) {
+                console.error('Precomputed recommendations failed:', preError.message);
+                console.error('Full error:', preError);
+                throw new Error('Both recommendation systems failed. Please try again.');
+            }
+        } else if (!response) {
+            throw new Error('No recommendation system available. Please reload the page.');
         }
         
         statusEl.style.color = 'green';
