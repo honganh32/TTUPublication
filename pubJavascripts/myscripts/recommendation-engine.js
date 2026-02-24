@@ -134,29 +134,35 @@ const RecommendationEngine = (function() {
             // 5. Run logistic regression model
             const results = await session.run(inputObj);
             
-            // 6. Get predicted probabilities
+            // 6. Get all available outputs
             const outputs = session.outputNames;
+            console.log('Available outputs:', outputs);
             
-            // Find the probability/class output (usually contains 'probabilities' or 'output')
-            let probabilityOutput = null;
+            // Find the probabilities output (usually the first tensor output that's float32)
+            let probabilities = null;
+            let probabilityOutputName = null;
+            
             for (const outputName of outputs) {
-                if (outputName.toLowerCase().includes('prob') || 
-                    outputName.toLowerCase().includes('output') ||
-                    outputName.toLowerCase().includes('class')) {
-                    probabilityOutput = outputName;
+                const output = results[outputName];
+                console.log(`Output "${outputName}":`, { 
+                    type: output.type,
+                    dims: output.dims
+                });
+                
+                // Look for float32 tensor with correct dimensions
+                if (output.type === 'float32' && output.dims && output.dims.length === 2) {
+                    probabilities = output.data;
+                    probabilityOutputName = outputName;
                     break;
                 }
             }
             
-            // Default to first output if no match found
-            if (!probabilityOutput) {
-                probabilityOutput = outputs[0];
+            if (!probabilities) {
+                throw new Error('Could not find probability output in model results');
             }
             
-            const probabilities = results[probabilityOutput].data;
-            
-            console.log('Logistic Regression Output:', { 
-                outputName: probabilityOutput, 
+            console.log('Using output:', { 
+                outputName: probabilityOutputName, 
                 classCount: probabilities.length 
             });
             
