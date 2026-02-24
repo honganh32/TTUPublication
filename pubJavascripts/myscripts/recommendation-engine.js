@@ -135,137 +135,90 @@ const RecommendationEngine = (function() {
             const outputs = session.outputNames;
             console.log('Model output names:', outputs);
             
-            // 6. Try to fetch outputs intelligently - start with probability output if available
+            // 6. Run logistic regression model WITHOUT specifying outputs
+            // This lets ONNX.js return only the outputs it can deserialize
             let results;
-            let outputsToFetch = [];
             
-            // Prefer output_probability, but include others as backup
-            if (outputs.includes('output_probability')) {
-                outputsToFetch = ['output_probability'];
-            } else if (outputs.includes('output_label')) {
-                outputsToFetch = ['output_label'];
-            } else {
-                outputsToFetch = outputs.slice(0, 1); // Try first output only
-            }
-            
-            console.log('Fetching outputs:', outputsToFetch);
+            console.log('Running model without specifying outputs...');
             
             try {
-                // Fetch only the specified outputs
-                results = await session.run(inputObj, outputsToFetch);
-                console.log('✓ Successfully fetched outputs:', outputsToFetch);
+                // Run without output specification - ONNX.js will return what it can
+                results = await session.run(inputObj);
+                console.log('✓ Successfully ran model');
+                console.log('Returned output keys:', Object.keys(results));
             } catch (runError) {
-                console.error('Failed to fetch outputs:', runError.message);
-                throw new Error(`Cannot fetch model outputs: ${runError.message}`);
+                console.error('Failed to run model:', runError.message);
+                throw new Error(`Cannot run model: ${runError.message}`);
             }
             
-            // Safely iterate through fetched outputs
+            // Safely iterate through returned outputs
             // 7. Get output details
             
-            // Get output details without crashing
             const outputDetails = {};
-            for (const name of outputsToFetch) {
+            const returnedOutputNames = Object.keys(results);
+            
+            for (const name of returnedOutputNames) {
                 try {
                     const outputValue = results[name];
                     outputDetails[name] = {
                         hasData: !!outputValue.data,
                         type: outputValue.type,
-                        dims: outputValue.dims
+                        dims: outputValue.dims,
+                        dataLength: outputValue.data ? outputValue.data.length : 'N/A'
                     };
                 } catch (e) {
                     outputDetails[name] = { error: e.message };
                 }
             }
-            console.log('Output details:', outputDetails);
+            console.log('Returned output details:', outputDetails);
             
-            // Find the probability tensor in the fetched outputs
-            let probabilities = null;
-            let probabilityOutputName = null;
+            // Find the label output (int64, single value - this is the predicted class index)
+            let classIndex = null;
+            let labelOutputName = null;
             
-            // Try each fetched output to find the one with probabilities
-            for (const outputName of outputsToFetch) {
+            for (const outputName of returnedOutputNames) {
                 try {
                     const output = results[outputName];
                     
-                    // Check if output is a tensor (has data property)
                     if (output && output.data) {
                         console.log(`Output "${outputName}": type=${output.type}, dims=${JSON.stringify(output.dims)}, size=${output.data.length}`);
                         
-                        // Check if this looks like probabilities (float32 with 10+ elements, or int64 with single element)
-                        if ((output.type === 'float32' && output.data.length >= 10) || 
-                            (output.type === 'int64' && output.data.length === 1)) {
-                            // Try to get probabilities - for int64 single value, this is just the class index
-                            if (output.type === 'float32') {
-                                probabilities = output.data;
-                                probabilityOutputName = outputName;
-                                console.log(`✓ Using output "${outputName}" as probabilities (float32)`);
-                                break;
-                            }
-                        }
-                    } else {
-                        console.log(`Output "${outputName}": not a tensor`, output);
-                    }
-                } catch (e) {
-                    console.log(`Output "${outputName}": error -`, e.message);
-                }
-            }
-            
-            // If we didn't find probabilities yet, try fetching ALL outputs
-            if (!probabilities && outputsToFetch.length < outputs.length) {
-                console.log('Probabilities not found in fetched outputs, attempting to fetch all outputs...');
-                try {
-                    const allResults = await session.run(inputObj, outputs);
-                    for (const outputName of outputs) {
-                        try {
-                            const output = allResults[outputName];
-                            if (output && output.data && output.type === 'float32' && output.data.length >= 10) {
-                                probabilities = output.data;
-                                probabilityOutputName = outputName;
-                                console.log(`✓ Found probabilities in "${outputName}"`);
-                                break;
-                            }
-                        } catch (e) {
-                            // Skip this output
+                        // Look for int64 with single value - that's the predicted class index
+                        if (output.type === 'int64' && output.data.length === 1) {
+                            classIndex = output.data[0];
+                            labelOutputName = outputName;
+                            console.log(`✓ Found class index output "${outputName}": ${classIndex}`);
+                            break;
                         }
                     }
                 } catch (e) {
-                    console.log('Could not fetch all outputs:', e.message);
+                    console.log(`Output "${outputName}": error accessing -`, e.message);
                 }
             }
             
-            if (!probabilities) {
-                throw new Error('Could not find probability output in model results. Check console for available outputs.');
+            if (classIndex === null) {
+                throw new Error('Could not find predicted class output. Check console for available outputs. Returned: ' + returnedOutputNames.join(', '));
             }
             
             console.log('Using output:', { 
-                outputName: probabilityOutputName, 
-                classCount: probabilities.length 
+                outputName: labelOutputName,
+                classIndex: classIndex
             });
             
-            // 8. Get predicted class index and class name
-            let maxProb = 0;
-            let predictedIdx = 0;
-            
-            for (let i = 0; i < probabilities.length; i++) {
-                if (probabilities[i] > maxProb) {
-                    maxProb = probabilities[i];
-                    predictedIdx = i;
-                }
-            }
-            
-            const predictedTheme = labelEncoder.classes[predictedIdx];
-            const confidence = (maxProb * 100).toFixed(1);
+            // 8. Get predicted class name using the class index
+            const predictedTheme = labelEncoder.classes[classIndex];
+            const confidence = '50'; // Without full probabilities, use default confidence
             
             console.log('Prediction Result:', { 
                 theme: predictedTheme, 
                 confidence: confidence + '%',
-                classIndex: predictedIdx 
+                classIndex: classIndex
             });
             
             return {
                 theme: predictedTheme,
                 confidence: confidence,
-                probabilities: Array.from(probabilities),
+                probabilities: null,
                 allThemes: labelEncoder.classes
             };
         } catch (error) {
