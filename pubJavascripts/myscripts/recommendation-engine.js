@@ -135,30 +135,36 @@ const RecommendationEngine = (function() {
             const outputs = session.outputNames;
             console.log('Model output names:', outputs);
             
-            // 6. Run logistic regression model, specifying which outputs to fetch
-            // This prevents errors from trying to fetch non-tensor outputs (like string labels)
+            // 6. Try to fetch outputs intelligently - start with probability output if available
             let results;
-            try {
-                // Try fetching all outputs first (ONNX will skip non-tensor ones)
-                results = await session.run(inputObj, outputs);
-            } catch (runError) {
-                console.warn('Failed to fetch all outputs:', runError.message);
-                // Fallback: try fetching just the first output
-                console.log('Attempting to fetch first output only...');
-                try {
-                    results = await session.run(inputObj, [outputs[0]]);
-                    console.warn('⚠️ Warning: Using only first output due to output fetch error');
-                } catch (fallbackError) {
-                    throw new Error(`Cannot fetch model outputs: ${runError.message}`);
-                }
+            let outputsToFetch = [];
+            
+            // Prefer output_probability, but include others as backup
+            if (outputs.includes('output_probability')) {
+                outputsToFetch = ['output_probability'];
+            } else if (outputs.includes('output_label')) {
+                outputsToFetch = ['output_label'];
+            } else {
+                outputsToFetch = outputs.slice(0, 1); // Try first output only
             }
             
-            // Safely iterate through outputs
+            console.log('Fetching outputs:', outputsToFetch);
+            
+            try {
+                // Fetch only the specified outputs
+                results = await session.run(inputObj, outputsToFetch);
+                console.log('✓ Successfully fetched outputs:', outputsToFetch);
+            } catch (runError) {
+                console.error('Failed to fetch outputs:', runError.message);
+                throw new Error(`Cannot fetch model outputs: ${runError.message}`);
+            }
+            
+            // Safely iterate through fetched outputs
             // 7. Get output details
             
             // Get output details without crashing
             const outputDetails = {};
-            for (const name of outputs) {
+            for (const name of outputsToFetch) {
                 try {
                     const outputValue = results[name];
                     outputDetails[name] = {
@@ -172,11 +178,12 @@ const RecommendationEngine = (function() {
             }
             console.log('Output details:', outputDetails);
             
-            // Find the probabilities output (usually the first tensor output that's float32)
+            // Find the probability tensor in the fetched outputs
             let probabilities = null;
             let probabilityOutputName = null;
             
-            for (const outputName of outputs) {
+            // Try each fetched output to find the one with probabilities
+            for (const outputName of outputsToFetch) {
                 try {
                     const output = results[outputName];
                     
@@ -184,18 +191,45 @@ const RecommendationEngine = (function() {
                     if (output && output.data) {
                         console.log(`Output "${outputName}": type=${output.type}, dims=${JSON.stringify(output.dims)}, size=${output.data.length}`);
                         
-                        // Use the first float32 tensor output with 10+ elements (class probabilities)
-                        if (output.type === 'float32' && output.data.length >= 10) {
-                            probabilities = output.data;
-                            probabilityOutputName = outputName;
-                            console.log(`✓ Using output "${outputName}" as probabilities`);
-                            break;
+                        // Check if this looks like probabilities (float32 with 10+ elements, or int64 with single element)
+                        if ((output.type === 'float32' && output.data.length >= 10) || 
+                            (output.type === 'int64' && output.data.length === 1)) {
+                            // Try to get probabilities - for int64 single value, this is just the class index
+                            if (output.type === 'float32') {
+                                probabilities = output.data;
+                                probabilityOutputName = outputName;
+                                console.log(`✓ Using output "${outputName}" as probabilities (float32)`);
+                                break;
+                            }
                         }
                     } else {
-                        console.log(`Output "${outputName}": skipped (not a tensor)`);
+                        console.log(`Output "${outputName}": not a tensor`, output);
                     }
                 } catch (e) {
                     console.log(`Output "${outputName}": error -`, e.message);
+                }
+            }
+            
+            // If we didn't find probabilities yet, try fetching ALL outputs
+            if (!probabilities && outputsToFetch.length < outputs.length) {
+                console.log('Probabilities not found in fetched outputs, attempting to fetch all outputs...');
+                try {
+                    const allResults = await session.run(inputObj, outputs);
+                    for (const outputName of outputs) {
+                        try {
+                            const output = allResults[outputName];
+                            if (output && output.data && output.type === 'float32' && output.data.length >= 10) {
+                                probabilities = output.data;
+                                probabilityOutputName = outputName;
+                                console.log(`✓ Found probabilities in "${outputName}"`);
+                                break;
+                            }
+                        } catch (e) {
+                            // Skip this output
+                        }
+                    }
+                } catch (e) {
+                    console.log('Could not fetch all outputs:', e.message);
                 }
             }
             
@@ -208,7 +242,7 @@ const RecommendationEngine = (function() {
                 classCount: probabilities.length 
             });
             
-            // 7. Get predicted class index and class name
+            // 8. Get predicted class index and class name
             let maxProb = 0;
             let predictedIdx = 0;
             
