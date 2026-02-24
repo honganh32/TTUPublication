@@ -77,8 +77,9 @@ const RecommendationEngine = (function() {
             const inputs = tfidfSession.inputNames;
             const inputName = inputs[0];
             
-            // Create 2D string tensor [1, 1] as expected by the model
-            const input = new ort.Tensor('string', [[text]], [1, 1]);
+            // Create 2D string tensor [1, 1] with flat data array
+            // IMPORTANT: For ONNX.js string tensors, data must be a flat array
+            const input = new ort.Tensor('string', [text], [1, 1]);
             
             // Create input object with the correct key
             const inputObj = {};
