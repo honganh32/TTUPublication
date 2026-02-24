@@ -131,12 +131,30 @@ const RecommendationEngine = (function() {
                 featureCount: features.length 
             });
             
-            // 5. Run logistic regression model
-            const results = await session.run(inputObj);
-            
-            // 6. Safely iterate through outputs
+            // 5. Get output names first (before running to avoid fetching non-tensor types)
             const outputs = session.outputNames;
             console.log('Model output names:', outputs);
+            
+            // 6. Run logistic regression model, specifying which outputs to fetch
+            // This prevents errors from trying to fetch non-tensor outputs (like string labels)
+            let results;
+            try {
+                // Try fetching all outputs first (ONNX will skip non-tensor ones)
+                results = await session.run(inputObj, outputs);
+            } catch (runError) {
+                console.warn('Failed to fetch all outputs:', runError.message);
+                // Fallback: try fetching just the first output
+                console.log('Attempting to fetch first output only...');
+                try {
+                    results = await session.run(inputObj, [outputs[0]]);
+                    console.warn('⚠️ Warning: Using only first output due to output fetch error');
+                } catch (fallbackError) {
+                    throw new Error(`Cannot fetch model outputs: ${runError.message}`);
+                }
+            }
+            
+            // Safely iterate through outputs
+            // 7. Get output details
             
             // Get output details without crashing
             const outputDetails = {};
