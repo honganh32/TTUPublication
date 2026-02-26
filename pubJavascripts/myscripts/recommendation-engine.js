@@ -327,6 +327,15 @@ const RecommendationEngine = (function() {
                 if (error) {
                     reject(error);
                 } else {
+                    // Merge with locally added projects (if available)
+                    if (typeof getLocalProjects === 'function') {
+                        const localProjects = getLocalProjects();
+                        if (localProjects.length > 0) {
+                            console.log(`[recommendation-engine] Merging ${localProjects.length} locally added projects`);
+                            data = data.concat(localProjects);
+                        }
+                    }
+                    
                     // Normalize data keys to lowercase for consistency
                     const normalizedData = data.map(row => ({
                         code: row.Code || row.code || '',

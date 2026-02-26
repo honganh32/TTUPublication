@@ -145,7 +145,28 @@ var listYear = [];
 
 
 
-d3.tsv("grants_final.tsv", function(error, data_) {
+// Load TSV data and merge with locally stored projects (for GitHub Pages)
+function loadGrantsDataWithLocal(tsvPath, callback) {
+    d3.tsv(tsvPath, function(error, data) {
+        if (error) {
+            callback(error, null);
+            return;
+        }
+        
+        // Check if getLocalProjects function exists (defined in index.html)
+        if (typeof getLocalProjects === 'function') {
+            const localProjects = getLocalProjects();
+            if (localProjects.length > 0) {
+                console.log(`[main.js] Merging ${localProjects.length} locally added projects into visualization`);
+                data = data.concat(localProjects);
+            }
+        }
+        
+        callback(null, data);
+    });
+}
+
+loadGrantsDataWithLocal("grants_final.tsv", function(error, data_) {
 // d3.tsv("publication.tsv", function(error, data_) {
     if (error) throw error;
     data = data_;

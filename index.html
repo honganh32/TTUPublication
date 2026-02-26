@@ -23,8 +23,16 @@
 <h3>RESEARCHES</h3>
 
 <!-- GitHub Pages Notice -->
-<div style="margin-bottom: 15px; padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-    <strong>⚠️ GitHub Pages Mode:</strong> This site is running in static mode. Adding projects will only update your local view (not saved to server).
+<div id="github-pages-notice" style="margin-bottom: 15px; padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <strong>⚠️ GitHub Pages Mode:</strong> Projects are saved in your browser's localStorage. 
+            <span id="local-projects-count" style="font-weight: bold;"></span>
+        </div>
+        <button id="clear-local-projects-btn" style="padding: 5px 10px; background-color: #dc3545; color: white; border: none; cursor: pointer; border-radius: 3px; font-size: 12px;">
+            🗑️ Clear Local Projects
+        </button>
+    </div>
 </div>
 
 <div id="mode-selector" style="margin-bottom: 20px; padding: 10px; background-color: #f0f0f0; border-radius: 4px;">
@@ -114,12 +122,50 @@
 <div id="research-list"></div>
 
 <script>
+// ========== LOCAL STORAGE MANAGEMENT ==========
+// Store new projects in browser localStorage for GitHub Pages persistence
+
+function getLocalProjects() {
+    try {
+        const stored = localStorage.getItem('ttu_added_projects');
+        return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+        console.error('Error reading localStorage:', e);
+        return [];
+    }
+}
+
+function saveProjectToLocal(project) {
+    try {
+        const projects = getLocalProjects();
+        projects.push(project);
+        localStorage.setItem('ttu_added_projects', JSON.stringify(projects));
+        console.log('Project saved to localStorage:', project);
+        return true;
+    } catch (e) {
+        console.error('Error saving to localStorage:', e);
+        return false;
+    }
+}
+
+function clearLocalProjects() {
+    try {
+        localStorage.removeItem('ttu_added_projects');
+        console.log('Cleared all locally added projects');
+        return true;
+    } catch (e) {
+        console.error('Error clearing localStorage:', e);
+        return false;
+    }
+}
+
 // Function to reset/reload the entire visualization
 function resetVisualization() {
     console.log('Resetting visualization...');
     // Reload the entire page to reinitialize all visualizations
     window.location.reload();
 }
+
 // Utility function to create safe HTML IDs from researcher names
 function getSafeId(str) {
     return str
@@ -133,6 +179,13 @@ function loadAndDisplayResearch() {
         if (error) {
             console.error("Error loading grants_final.tsv:", error);
             return;
+        }
+        
+        // Merge with locally added projects
+        const localProjects = getLocalProjects();
+        if (localProjects.length > 0) {
+            console.log(`Merging ${localProjects.length} locally added projects`);
+            data = data.concat(localProjects);
         }
         
         var container = d3.select("#research-list");
@@ -176,6 +229,47 @@ document.getElementById('reset-visualization-btn').addEventListener('click', fun
         resetVisualization();
     }
 });
+
+// Show localStorage status on page load
+window.addEventListener('DOMContentLoaded', function() {
+    updateLocalProjectsCount();
+    
+    // Clear local projects button handler
+    document.getElementById('clear-local-projects-btn').addEventListener('click', function() {
+        const localProjects = getLocalProjects();
+        if (localProjects.length === 0) {
+            alert('No local projects to clear.');
+            return;
+        }
+        
+        if (confirm(`This will permanently delete ${localProjects.length} locally added project(s). This cannot be undone. Continue?`)) {
+            if (clearLocalProjects()) {
+                alert('Local projects cleared successfully!');
+                updateLocalProjectsCount();
+                resetVisualization();
+            } else {
+                alert('Failed to clear local projects.');
+            }
+        }
+    });
+});
+
+function updateLocalProjectsCount() {
+    const localProjects = getLocalProjects();
+    const countEl = document.getElementById('local-projects-count');
+    const clearBtn = document.getElementById('clear-local-projects-btn');
+    
+    if (localProjects.length > 0) {
+        countEl.textContent = `(${localProjects.length} local project${localProjects.length > 1 ? 's' : ''} stored)`;
+        countEl.style.color = '#28a745';
+        clearBtn.style.display = 'inline-block';
+        console.log(`📦 ${localProjects.length} projects loaded from localStorage`);
+    } else {
+        countEl.textContent = '(No local projects)';
+        countEl.style.color = '#666';
+        clearBtn.style.display = 'none';
+    }
+}
 
 // ========== MODE SWITCHING ==========
 document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
@@ -482,19 +576,25 @@ document.getElementById('accept-recommendation-btn').addEventListener('click', f
     const theme = currentRecommendations.predicted_theme;
     const title = document.getElementById('input-rec-title').value.trim();
     
-    // On GitHub Pages, we can't save to server, but we can update the view
-    // In a real deployment, you'd use a backend service or database
-    console.log('Adding project (client-side only):', {
-        code: code,
-        time: time,
-        theme: theme,
-        title: title,
-        authors: authors
-    });
+    // Save project to localStorage for persistence
+    const newProject = {
+        Code: code,
+        Time: time,
+        Theme: theme,
+        Title: title,
+        Authors: authors
+    };
     
-    // Show success message
-    document.getElementById('rec-status').textContent = 'Project added to view (not saved to server)';
-    document.getElementById('rec-status').style.color = 'green';
+    const saved = saveProjectToLocal(newProject);
+    
+    if (saved) {
+        document.getElementById('rec-status').textContent = 'Project saved locally!';
+        document.getElementById('rec-status').style.color = 'green';
+        updateLocalProjectsCount(); // Update the counter
+    } else {
+        document.getElementById('rec-status').textContent = 'Warning: Could not save project';
+        document.getElementById('rec-status').style.color = 'orange';
+    }
             
             // Clear recommendation form
             document.getElementById('input-rec-title').value = '';
@@ -541,17 +641,25 @@ document.getElementById("add-project-form").addEventListener("submit", function(
     // Format the new row for TSV (matching the existing format with quotes)
     var newRow = '"' + code + '"\t' + time + '\t"' + theme + '"\t\'' + title + '\'\t"' + authors + '"';
     
-    // On GitHub Pages, we can only update the local view
-    console.log('Adding project (client-side only):', {
-        code: code,
-        time: time,
-        theme: theme,
-        title: title,
-        authors: authors
-    });
+    // Save project to localStorage for persistence
+    const newProject = {
+        Code: code,
+        Time: time,
+        Theme: theme,
+        Title: title,
+        Authors: authors
+    };
     
-    document.getElementById("add-project-status").textContent = "Project added to view (not saved)";
-    document.getElementById("add-project-status").style.color = "orange";
+    const saved = saveProjectToLocal(newProject);
+    
+    if (saved) {
+        document.getElementById("add-project-status").textContent = "Project saved locally!";
+        document.getElementById("add-project-status").style.color = "green";
+        updateLocalProjectsCount(); // Update the counter
+    } else {
+        document.getElementById("add-project-status").textContent = "Warning: Could not save project";
+        document.getElementById("add-project-status").style.color = "orange";
+    }
     
     // Clear form
     document.getElementById("add-project-form").reset();
