@@ -116,7 +116,10 @@
     <button type="button" id="reset-visualization-btn" style="padding: 10px 20px; background-color: #FF9800; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold;">
         🔄 Reset Visualization
     </button>
-    <span style="margin-left: 15px; color: #666;">Click to reload and refresh all visualizations</span>
+    <button type="button" id="debug-storage-btn" style="padding: 10px 20px; background-color: #2196F3; color: white; border: none; cursor: pointer; border-radius: 4px; margin-left: 10px;">
+        🔍 Debug Storage
+    </button>
+    <span style="margin-left: 15px; color: #666;">Click Reset to reload and refresh all visualizations</span>
 </div>
 
 <div id="research-list"></div>
@@ -128,7 +131,12 @@
 function getLocalProjects() {
     try {
         const stored = localStorage.getItem('ttu_added_projects');
-        return stored ? JSON.parse(stored) : [];
+        const projects = stored ? JSON.parse(stored) : [];
+        console.log(`[index.html] getLocalProjects called: ${projects.length} projects in localStorage`);
+        if (projects.length > 0) {
+            console.log('[index.html] Stored projects:', projects);
+        }
+        return projects;
     } catch (e) {
         console.error('Error reading localStorage:', e);
         return [];
@@ -161,12 +169,32 @@ function clearLocalProjects() {
 
 // Function to reset/reload the entire visualization
 function resetVisualization() {
-    console.log('Resetting visualization (hard reload to bypass cache)...');
-    // Force a hard reload by adding a timestamp to bypass cache
-    // This ensures localStorage data is properly loaded
-    const url = new URL(window.location.href);
-    url.searchParams.set('_refresh', Date.now());
-    window.location.href = url.toString();
+    console.log('Resetting visualization (forcing hard reload)...');
+    
+    // Set a flag in sessionStorage to track we're doing a refresh
+    sessionStorage.setItem('ttu_force_refresh', 'true');
+    
+    // Multiple approaches to ensure cache is bypassed:
+    
+    // 1. Clear service worker cache if exists
+    if ('caches' in window) {
+        caches.keys().then(function(names) {
+            names.forEach(function(name) {
+                caches.delete(name);
+            });
+        });
+    }
+    
+    // 2. Force hard reload (deprecated but still works in most browsers)
+    // The 'true' parameter forces reload from server, not cache
+    if (window.location.reload) {
+        window.location.reload(true);
+    } else {
+        // Fallback: Navigate to same URL with cache-busting parameter
+        const url = new URL(window.location.href);
+        url.searchParams.set('_t', Date.now());
+        window.location.href = url.toString();
+    }
 }
 
 // Utility function to create safe HTML IDs from researcher names
@@ -233,8 +261,27 @@ document.getElementById('reset-visualization-btn').addEventListener('click', fun
     }
 });
 
+// Debug storage button handler
+document.getElementById('debug-storage-btn').addEventListener('click', function() {
+    console.log('=== STORAGE DEBUG ===');
+    const localProjects = getLocalProjects();
+    console.log('localStorage projects:', localProjects);
+    console.log('Total count:', localProjects.length);
+    
+    // Also test if the function is available in main.js context
+    console.log('getLocalProjects function available?', typeof getLocalProjects);
+    
+    alert(`Storage Debug:\n\nLocal Projects: ${localProjects.length}\n\nCheck browser console (F12) for details.`);
+});
+
 // Show localStorage status on page load
 window.addEventListener('DOMContentLoaded', function() {
+    // Check if this was a forced refresh
+    if (sessionStorage.getItem('ttu_force_refresh') === 'true') {
+        console.log('✅ Page loaded after forced refresh');
+        sessionStorage.removeItem('ttu_force_refresh');
+    }
+    
     updateLocalProjectsCount();
     
     // Clear local projects button handler

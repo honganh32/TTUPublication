@@ -147,19 +147,30 @@ var listYear = [];
 
 // Load TSV data and merge with locally stored projects (for GitHub Pages)
 function loadGrantsDataWithLocal(tsvPath, callback) {
+    console.log('[main.js] Loading grants data from:', tsvPath);
+    
     d3.tsv(tsvPath, function(error, data) {
         if (error) {
+            console.error('[main.js] Error loading TSV:', error);
             callback(error, null);
             return;
         }
+        
+        console.log(`[main.js] Loaded ${data.length} projects from TSV`);
         
         // Check if getLocalProjects function exists (defined in index.html)
         if (typeof getLocalProjects === 'function') {
             const localProjects = getLocalProjects();
             if (localProjects.length > 0) {
-                console.log(`[main.js] Merging ${localProjects.length} locally added projects into visualization`);
+                console.log(`[main.js] ✅ Merging ${localProjects.length} locally added projects into visualization`);
+                console.log('[main.js] Local projects:', localProjects);
                 data = data.concat(localProjects);
+                console.log(`[main.js] Total projects after merge: ${data.length}`);
+            } else {
+                console.log('[main.js] No local projects to merge');
             }
+        } else {
+            console.warn('[main.js] getLocalProjects function not found');
         }
         
         callback(null, data);
