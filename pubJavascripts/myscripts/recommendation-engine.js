@@ -104,6 +104,33 @@ const RecommendationEngine = (function() {
         }
     }
     
+    // Calculate cosine similarity between two vectors
+    function cosineSimilarity(vec1, vec2) {
+        if (vec1.length !== vec2.length) {
+            console.warn('Vector length mismatch:', vec1.length, 'vs', vec2.length);
+            return 0;
+        }
+        
+        let dotProduct = 0;
+        let norm1 = 0;
+        let norm2 = 0;
+        
+        for (let i = 0; i < vec1.length; i++) {
+            dotProduct += vec1[i] * vec2[i];
+            norm1 += vec1[i] * vec1[i];
+            norm2 += vec2[i] * vec2[i];
+        }
+        
+        norm1 = Math.sqrt(norm1);
+        norm2 = Math.sqrt(norm2);
+        
+        if (norm1 === 0 || norm2 === 0) {
+            return 0;
+        }
+        
+        return dotProduct / (norm1 * norm2);
+    }
+    
     // Predict theme from text
     async function predictTheme(projectTitle) {
         if (!session || !labelEncoder) {
@@ -247,9 +274,18 @@ const RecommendationEngine = (function() {
     }
     
     // Get researchers for a theme from grants data
-    function getResearchersForTheme(theme, grantsData) {
+    async function getResearchersForTheme(theme, grantsData, projectTitle) {
         if (!grantsData || !Array.isArray(grantsData)) {
             return [];
+        }
+        
+        // Vectorize the input project title for similarity comparison
+        let inputVector = null;
+        try {
+            inputVector = await vectorizeText(projectTitle);
+            console.log(`Vectorized input title for keyword matching`);
+        } catch (error) {
+            console.warn('Could not vectorize input title for keyword matching:', error);
         }
         
         // Find all researchers who have worked in this theme
@@ -269,6 +305,7 @@ const RecommendationEngine = (function() {
                                 theme_projects: 0,
                                 total_projects: 0,
                                 projects: [],
+                                titleVectors: [], // Store vectorized titles
                                 breakdown: {
                                     theme_score: 0,
                                     keyword_score: 0,
@@ -279,6 +316,19 @@ const RecommendationEngine = (function() {
                         }
                         researcherScores[author].theme_projects += 1;
                         researcherScores[author].projects.push(grant.title);
+                        
+                        // Vectorize the project title for this researcher
+                        if (inputVector) {
+                            try {
+                                const titleVector = await vectorizeText(grant.title);
+                                researcherScores[author].titleVectors.push({
+                                    title: grant.title,
+                                    vector: titleVector
+                                });
+                            } catch (e) {
+                                // Skip if vectorization fails for this title
+                            }
+                        }
                     }
                 }
             }
@@ -300,6 +350,34 @@ const RecommendationEngine = (function() {
             
             // Theme match score (primary factor)
             data.breakdown.theme_score = data.theme_projects * 30;
+            
+            // Keyword similarity score (TF-IDF cosine similarity with input title)
+            if (inputVector && data.titleVectors.length > 0) {
+                let maxSimilarity = 0;
+                let bestMatchTitle = '';
+                
+                for (const titleData of data.titleVectors) {
+                    const similarity = cosineSimilarity(inputVector, titleData.vector);
+                    if (similarity > maxSimilarity) {
+                        maxSimilarity = similarity;
+                        bestMatchTitle = titleData.title;
+                    }
+                }
+                
+                // Exact match detection (threshold >= 0.85)
+                if (maxSimilarity >= 0.85) {
+                    // High similarity: exact or near-exact match
+                    // Apply multiplier similar to Python version (150-200x boost)
+                    data.breakdown.keyword_score = maxSimilarity * 200;
+                    console.log(`High similarity match found for ${researcher}: "${bestMatchTitle}" (${maxSimilarity.toFixed(3)})`);
+                } else if (maxSimilarity > 0.2) {
+                    // Partial keyword match
+                    data.breakdown.keyword_score = maxSimilarity * 50;
+                } else {
+                    // Low similarity
+                    data.breakdown.keyword_score = 0;
+                }
+            }
             
             // Contribution score (how many projects overall)
             data.breakdown.contribution_score = Math.min(data.total_projects * 5, 50);
@@ -367,8 +445,8 @@ const RecommendationEngine = (function() {
             
             console.log(`Predicted theme: "${prediction.theme}" (${prediction.confidence}% confidence)`);
             
-            // 3. Get researchers for this theme
-            const researchers = getResearchersForTheme(prediction.theme, grantsData);
+            // 3. Get researchers for this theme (with keyword similarity)
+            const researchers = await getResearchersForTheme(prediction.theme, grantsData, projectTitle);
             
             // 4. Return top N researchers
             const topResearchers = researchers.slice(0, topN);
