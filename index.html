@@ -5,16 +5,12 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
 <script src="pubJavascripts/javascripts/d3.v3.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.6.3/d3-tip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.all.min.js"></script>
+<script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
 <script src="pubJavascripts/javascripts/fisheye.js"></script>
 <script src="pubJavascripts/myscripts/util.js"></script>
 <script src="pubJavascripts/myscripts/sliderRelationship.js"></script>
 <script src="pubJavascripts/myscripts/sliderRadius.js"></script>
 <script src="pubJavascripts/myscripts/streamGraph.js"></script>
-<script src="pubJavascripts/myscripts/data-loader.js"></script>
-<script src="pubJavascripts/myscripts/recommendation-engine.js"></script>
-<script src="pubJavascripts/myscripts/precomputed-recommendations.js"></script>
 <script src="pubJavascripts/myscripts/main.js"></script>
 
 <script type='text/javascript' src="https://code.jquery.com/ui/1.11.0/jquery-ui.min.js"> </script>
@@ -29,11 +25,8 @@
         <input type="radio" name="input-mode" value="manual" checked> Manual Entry
     </label>
     <label>
-        <input type="radio" name="input-mode" value="recommendation"> AI Recommendation (Real-time)
+        <input type="radio" name="input-mode" value="recommendation"> AI Recommendation
     </label>
-    <div style="font-size: 12px; color: #666; margin-top: 8px;">
-        <strong>GitHub Pages Mode:</strong> Uses ONNX ML models in browser (real-time) or falls back to pre-computed recommendations
-    </div>
 </div>
 
 <div id="add-project-section" style="margin-bottom: 30px; padding: 15px; border: 1px solid #ccc; background-color: #f9f9f9;">
@@ -113,10 +106,12 @@ function getSafeId(str) {
         .replace(/^-+|-+$/g, '');
 }
 
-async function loadAndDisplayResearch() {
-    try {
-        // Load all projects (original + locally added)
-        const data = await DataManager.getAllProjects();
+function loadAndDisplayResearch() {
+    d3.tsv("grants_final.tsv", function(error, data) {
+        if (error) {
+            console.error("Error loading grants_final.tsv:", error);
+            return;
+        }
         
         var container = d3.select("#research-list");
         
@@ -133,27 +128,21 @@ async function loadAndDisplayResearch() {
             .enter().append("li")
             .style("margin-bottom", "15px")
             .html(function(d) {
-                var code = d.code || d.Code || "";
-                var time = d.time || d.Time || "";
-                var theme = d.theme || d.Theme || "";
-                var title = d.title || d.Title || "";
-                var authors = d.authors || d.Authors || "";
-                
-                // Mark locally added projects
-                var localMark = d._addedLocally ? ' <span style="color: #2196F3; font-size: 12px;">[LOCAL]</span>' : '';
+                var code = d.Code || "";
+                var time = d.Time || "";
+                var theme = d.Theme || "";
+                var title = d.Title || "";
+                var authors = d.Authors || "";
                 
                 // Parse authors (comma-separated)
                 var authorList = authors.split(",").map(function(a) { return a.trim(); });
                 var formattedAuthors = authorList.join(", ");
                 
-                return '<strong>[' + code + '] ' + title + '</strong>' + localMark + '<br/>' +
+                return '<strong>[' + code + '] ' + title + '</strong><br/>' +
                        'Year: ' + time + ' | Theme: ' + theme + '<br/>' +
                        'Authors: ' + formattedAuthors;
             });
-    } catch (error) {
-        console.error("Error loading research data:", error);
-        d3.select("#research-list").html('<p style="color: red;">Error loading data. Data file may not be converted yet. Run: python tsv_to_json.py</p>');
-    }
+    });
 }
 
 // Load initial research data
@@ -182,7 +171,7 @@ document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
 // ========== RECOMMENDATION SYSTEM ==========
 let currentRecommendations = null;
 
-document.getElementById('get-recommendations-btn').addEventListener('click', async function() {
+document.getElementById('get-recommendations-btn').addEventListener('click', function() {
     const projectTitle = document.getElementById('input-rec-title').value.trim();
     const statusEl = document.getElementById('rec-status');
     
@@ -192,78 +181,49 @@ document.getElementById('get-recommendations-btn').addEventListener('click', asy
         return;
     }
     
-    statusEl.textContent = 'Computing recommendations...';
+    statusEl.textContent = 'Loading recommendations...';
     statusEl.style.color = 'blue';
     
-    try {
-        // Try to use ONNX models (real-time compute) first
-        let response = null;
-        
-        if (typeof RecommendationEngine !== 'undefined' && RecommendationEngine && typeof RecommendationEngine.isAvailable === 'function') {
-            try {
-                const hasModels = await RecommendationEngine.isAvailable();
-                console.log('RecommendationEngine.isAvailable():', hasModels);
-                
-                if (hasModels) {
-                    try {
-                        // Load grants data
-                        const grantsData = await DataManager.getAllProjects();
-                        console.log('Loaded grants data, count:', grantsData.length);
-                        
-                        // Get recommendations using ONNX models
-                        console.log('Getting ONNX recommendations for:', projectTitle);
-                        response = await RecommendationEngine.getRecommendations(projectTitle, grantsData, 5);
-                        console.log('ONNX recommendation succeeded:', response);
-                        statusEl.textContent = 'Recommendations computed! (Real-time)';
-                    } catch (onnxError) {
-                        console.error('ONNX computation failed:', onnxError.message);
-                        console.error('Full error:', onnxError);
-                        console.warn('Trying precomputed fallback...');
-                        // Fall through to precomputed
-                        response = null;
-                    }
-                } else {
-                    console.log('ONNX models not available');
-                }
-            } catch (checkError) {
-                console.error('Error checking RecommendationEngine availability:', checkError);
+    $.ajax({
+        url: '/recommend_researchers',
+        type: 'POST',
+        data: {
+            project_title: projectTitle,
+            top_n: 5
+        },
+        success: function(response) {
+            statusEl.textContent = 'Recommendations received!';
+            statusEl.style.color = 'green';
+            
+            console.log('FULL Response:', JSON.stringify(response, null, 2));
+            console.log('Response recommendations:', response.recommendations);
+            if (response.recommendations && response.recommendations.length > 0) {
+                console.log('First recommendation:', JSON.stringify(response.recommendations[0], null, 2));
             }
-        } else {
-            console.log('RecommendationEngine not loaded');
-        }
-        
-        // Fall back to precomputed recommendations
-        if (!response && typeof PrecomputedRecommendations !== 'undefined' && PrecomputedRecommendations) {
+            
+            currentRecommendations = response;
             try {
-                console.log('Getting precomputed recommendations for:', projectTitle);
-                response = await PrecomputedRecommendations.getRecommendations(projectTitle, 5);
-                console.log('Precomputed recommendation succeeded:', response);
-                statusEl.textContent = 'Recommendations loaded! (Pre-computed)';
-            } catch (preError) {
-                console.error('Precomputed recommendations failed:', preError.message);
-                console.error('Full error:', preError);
-                throw new Error('Both recommendation systems failed. Please try again.');
+                displayRecommendations(response);
+                document.getElementById('recommendations-display').style.display = 'block';
+            } catch(e) {
+                console.error('Error displaying recommendations:', e);
+                statusEl.textContent = 'Error displaying recommendations: ' + e.message;
+                statusEl.style.color = 'red';
             }
-        } else if (!response) {
-            throw new Error('No recommendation system available. Please reload the page.');
-        }
-        
-        statusEl.style.color = 'green';
-        
-        currentRecommendations = response;
-        try {
-            displayRecommendations(response);
-            document.getElementById('recommendations-display').style.display = 'block';
-        } catch(e) {
-            console.error('Error displaying recommendations:', e);
-            statusEl.textContent = 'Error displaying recommendations: ' + e.message;
+        },
+        error: function(xhr, status, error) {
+            statusEl.textContent = 'Error getting recommendations';
             statusEl.style.color = 'red';
+            console.error('Recommendation error:', xhr.responseText);
+            
+            try {
+                const errorResponse = JSON.parse(xhr.responseText);
+                alert('Error: ' + (errorResponse.error || error));
+            } catch(e) {
+                alert('Error: ' + error);
+            }
         }
-    } catch(error) {
-        statusEl.textContent = 'Error: ' + error.message;
-        statusEl.style.color = 'red';
-        console.error('Recommendation error:', error);
-    }
+    });
 });
 
 function displayRecommendations(response) {
@@ -484,35 +444,39 @@ document.getElementById('accept-recommendation-btn').addEventListener('click', f
     const title = document.getElementById('input-rec-title').value.trim();
     
     // Submit the project
-    try {
-        DataManager.addProject({
+    $.ajax({
+        url: '/add_project',
+        type: 'POST',
+        data: {
             code: code,
-            time: parseInt(time),
+            time: time,
             theme: theme,
             title: title,
             authors: authors
-        });
-        
-        document.getElementById('rec-status').textContent = 'Project added successfully to local storage!';
-        document.getElementById('rec-status').style.color = 'green';
-        
-        // Clear recommendation form
-        document.getElementById('input-rec-title').value = '';
-        document.getElementById('rec-code').value = '';
-        document.getElementById('rec-time').value = '';
-        document.getElementById('rec-authors-select').value = '';
-        document.getElementById('recommendations-display').style.display = 'none';
-        
-        // Reload data
-        setTimeout(function() {
-            d3.select('#research-list').selectAll('ul').remove();
-            loadAndDisplayResearch();
-        }, 500);
-    } catch (error) {
-        document.getElementById('rec-status').textContent = 'Error: ' + error.message;
-        document.getElementById('rec-status').style.color = 'red';
-        console.error('Error:', error);
-    }
+        },
+        success: function(response) {
+            document.getElementById('rec-status').textContent = 'Project added successfully!';
+            document.getElementById('rec-status').style.color = 'green';
+            
+            // Clear recommendation form
+            document.getElementById('input-rec-title').value = '';
+            document.getElementById('rec-code').value = '';
+            document.getElementById('rec-time').value = '';
+            document.getElementById('rec-authors-select').value = '';
+            document.getElementById('recommendations-display').style.display = 'none';
+            
+            // Reload data
+            setTimeout(function() {
+                d3.select('#research-list').selectAll('ul').remove();
+                loadAndDisplayResearch();
+            }, 500);
+        },
+        error: function(xhr, status, error) {
+            document.getElementById('rec-status').textContent = 'Error adding project';
+            document.getElementById('rec-status').style.color = 'red';
+            console.error('Error:', xhr.responseText);
+        }
+    });
 });
 
 // ========== MANUAL ENTRY ==========
@@ -525,50 +489,61 @@ document.getElementById("add-project-form").addEventListener("submit", function(
     var title = document.getElementById("input-title").value.trim();
     var authors = document.getElementById("input-authors").value.trim();
     
-    var statusEl = document.getElementById("add-project-status");
-    
     // Validate inputs
     if (!code || !time || !theme || !title || !authors) {
-        statusEl.textContent = "Please fill in all fields.";
-        statusEl.style.color = "red";
+        document.getElementById("add-project-status").textContent = "Please fill in all fields.";
+        document.getElementById("add-project-status").style.color = "red";
         return;
     }
     
-    try {
-        // Add project to local storage
-        DataManager.addProject({
+    // Format the new row for TSV (matching the existing format with quotes)
+    var newRow = '"' + code + '"\t' + time + '\t"' + theme + '"\t\'' + title + '\'\t"' + authors + '"';
+    
+    // Send to server
+    $.ajax({
+        url: "/add_project",
+        type: "POST",
+        data: {
             code: code,
-            time: parseInt(time),
+            time: time,
             theme: theme,
             title: title,
             authors: authors
-        });
-        
-        statusEl.textContent = "Project added successfully to local storage! (Data is saved in your browser)";
-        statusEl.style.color = "green";
-        
-        // Clear form
-        document.getElementById("add-project-form").reset();
-        
-        // Reload research data after a short delay
-        setTimeout(function() {
-            // Clear the list
-            d3.select("#research-list").selectAll("ul").remove();
+        },
+        success: function(response) {
+            document.getElementById("add-project-status").textContent = "Project added successfully!";
+            document.getElementById("add-project-status").style.color = "green";
             
-            // Reload data
-            loadAndDisplayResearch();
+            // Clear form
+            document.getElementById("add-project-form").reset();
             
-            // Clear status message after 3 seconds
+            // Reload research data after a short delay
             setTimeout(function() {
-                statusEl.textContent = "";
-            }, 3000);
-        }, 300);
-        
-    } catch (error) {
-        statusEl.textContent = "Error adding project: " + error.message;
-        statusEl.style.color = "red";
-        console.error("Error:", error);
-    }
+                // Clear the list
+                d3.select("#research-list").selectAll("ul").remove();
+                
+                // Reload data
+                loadAndDisplayResearch();
+                
+                // Clear status message
+                document.getElementById("add-project-status").textContent = "";
+            }, 500);
+        },
+        error: function(xhr, status, error) {
+            var errorMsg = "Error adding project: " + error;
+            if (xhr.responseText) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.error) {
+                        errorMsg = "Error: " + response.error;
+                    }
+                } catch(e) {}
+            }
+            document.getElementById("add-project-status").textContent = errorMsg;
+            document.getElementById("add-project-status").style.color = "red";
+            console.error("AJAX error:", xhr.status, status, error, xhr.responseText);
+        }
+    });
 });
 </script>
 
