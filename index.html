@@ -111,15 +111,9 @@
 
 </div>
 
-<!-- Reset Visualization Button -->
-<div style="margin: 20px 0; padding: 10px; background-color: #fff; border: 1px solid #ddd; border-radius: 4px;">
-    <button type="button" id="reset-visualization-btn" style="padding: 10px 20px; background-color: #FF9800; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold;">
-        🔄 Reset Visualization
-    </button>
-    <button type="button" id="debug-storage-btn" style="padding: 10px 20px; background-color: #2196F3; color: white; border: none; cursor: pointer; border-radius: 4px; margin-left: 10px;">
-        🔍 Debug Storage
-    </button>
-    <span style="margin-left: 15px; color: #666;">Click Reset to reload and refresh all visualizations</span>
+<!-- Manual Refresh Instructions -->
+<div id="refresh-instructions" style="margin: 20px 0; padding: 15px; background-color: #e3f2fd; border-left: 4px solid #2196F3; border-radius: 4px; display: none;">
+    <strong>✅ Project Saved!</strong> To see it in the visualization, press <kbd style="background: white; padding: 2px 6px; border: 1px solid #ccc; border-radius: 3px; font-family: monospace;">Ctrl + Shift + R</kbd> (Windows/Linux) or <kbd style="background: white; padding: 2px 6px; border: 1px solid #ccc; border-radius: 3px; font-family: monospace;">Cmd + Shift + R</kbd> (Mac) to refresh.
 </div>
 
 <div id="research-list"></div>
@@ -168,35 +162,6 @@ function clearLocalProjects() {
 }
 
 // Function to reset/reload the entire visualization
-function resetVisualization() {
-    console.log('Resetting visualization (forcing hard reload)...');
-    
-    // Set a flag in sessionStorage to track we're doing a refresh
-    sessionStorage.setItem('ttu_force_refresh', 'true');
-    
-    // Multiple approaches to ensure cache is bypassed:
-    
-    // 1. Clear service worker cache if exists
-    if ('caches' in window) {
-        caches.keys().then(function(names) {
-            names.forEach(function(name) {
-                caches.delete(name);
-            });
-        });
-    }
-    
-    // 2. Force hard reload (deprecated but still works in most browsers)
-    // The 'true' parameter forces reload from server, not cache
-    if (window.location.reload) {
-        window.location.reload(true);
-    } else {
-        // Fallback: Navigate to same URL with cache-busting parameter
-        const url = new URL(window.location.href);
-        url.searchParams.set('_t', Date.now());
-        window.location.href = url.toString();
-    }
-}
-
 // Utility function to create safe HTML IDs from researcher names
 function getSafeId(str) {
     return str
@@ -254,34 +219,8 @@ function loadAndDisplayResearch() {
 // Load initial research data
 loadAndDisplayResearch();
 
-// Reset visualization button handler
-document.getElementById('reset-visualization-btn').addEventListener('click', function() {
-    if (confirm('This will reload the page and reset all visualizations. Continue?')) {
-        resetVisualization();
-    }
-});
-
-// Debug storage button handler
-document.getElementById('debug-storage-btn').addEventListener('click', function() {
-    console.log('=== STORAGE DEBUG ===');
-    const localProjects = getLocalProjects();
-    console.log('localStorage projects:', localProjects);
-    console.log('Total count:', localProjects.length);
-    
-    // Also test if the function is available in main.js context
-    console.log('getLocalProjects function available?', typeof getLocalProjects);
-    
-    alert(`Storage Debug:\n\nLocal Projects: ${localProjects.length}\n\nCheck browser console (F12) for details.`);
-});
-
 // Show localStorage status on page load
 window.addEventListener('DOMContentLoaded', function() {
-    // Check if this was a forced refresh
-    if (sessionStorage.getItem('ttu_force_refresh') === 'true') {
-        console.log('✅ Page loaded after forced refresh');
-        sessionStorage.removeItem('ttu_force_refresh');
-    }
-    
     updateLocalProjectsCount();
     
     // Clear local projects button handler
@@ -294,9 +233,8 @@ window.addEventListener('DOMContentLoaded', function() {
         
         if (confirm(`This will permanently delete ${localProjects.length} locally added project(s). This cannot be undone. Continue?`)) {
             if (clearLocalProjects()) {
-                alert('Local projects cleared successfully!');
+                alert('Local projects cleared successfully! Press Ctrl+Shift+R to refresh the page.');
                 updateLocalProjectsCount();
-                resetVisualization();
             } else {
                 alert('Failed to clear local projects.');
             }
@@ -641,18 +579,17 @@ document.getElementById('accept-recommendation-btn').addEventListener('click', f
         document.getElementById('rec-status').textContent = 'Project saved locally!';
         document.getElementById('rec-status').style.color = 'green';
         updateLocalProjectsCount(); // Update the counter
+        
+        // Show refresh instructions
+        document.getElementById('refresh-instructions').style.display = 'block';
+        setTimeout(function() {
+            document.getElementById('refresh-instructions').style.display = 'none';
+        }, 10000); // Hide after 10 seconds
     } else {
         document.getElementById('rec-status').textContent = 'Warning: Could not save project';
         document.getElementById('rec-status').style.color = 'orange';
     }
-            
-            // Clear recommendation form
-            document.getElementById('input-rec-title').value = '';
-            document.getElementById('rec-code').value = '';
-            document.getElementById('rec-time').value = '';
-            document.getElementById('rec-authors-select').value = '';
-            document.getElementById('recommendations-display').style.display = 'none';
-            
+    
     // Clear recommendation form
     document.getElementById('input-rec-title').value = '';
     document.getElementById('rec-code').value = '';
@@ -660,15 +597,10 @@ document.getElementById('accept-recommendation-btn').addEventListener('click', f
     document.getElementById('rec-authors-select').value = '';
     document.getElementById('recommendations-display').style.display = 'none';
     
-    // Reload visualization after a short delay
+    // Clear status message after delay
     setTimeout(function() {
-        document.getElementById('rec-status').textContent = 'Reloading visualization...';
-        document.getElementById('rec-status').style.color = 'blue';
-        
-        setTimeout(function() {
-            resetVisualization();
-        }, 500);
-    }, 1000);
+        document.getElementById('rec-status').textContent = '';
+    }, 3000);
 });
 
 // ========== MANUAL ENTRY ==========
@@ -706,6 +638,12 @@ document.getElementById("add-project-form").addEventListener("submit", function(
         document.getElementById("add-project-status").textContent = "Project saved locally!";
         document.getElementById("add-project-status").style.color = "green";
         updateLocalProjectsCount(); // Update the counter
+        
+        // Show refresh instructions
+        document.getElementById('refresh-instructions').style.display = 'block';
+        setTimeout(function() {
+            document.getElementById('refresh-instructions').style.display = 'none';
+        }, 10000); // Hide after 10 seconds
     } else {
         document.getElementById("add-project-status").textContent = "Warning: Could not save project";
         document.getElementById("add-project-status").style.color = "orange";
@@ -714,16 +652,10 @@ document.getElementById("add-project-form").addEventListener("submit", function(
     // Clear form
     document.getElementById("add-project-form").reset();
     
-    // Show success and reload visualization
+    // Clear status message after delay
     setTimeout(function() {
-        document.getElementById("add-project-status").textContent = "Reloading visualization...";
-        document.getElementById("add-project-status").style.color = "blue";
-        
-        // Reload the entire page to refresh visualization
-        setTimeout(function() {
-            resetVisualization();
-        }, 500);
-    }, 1500);
+        document.getElementById("add-project-status").textContent = "";
+    }, 3000);
 });
 </script>
 
