@@ -387,6 +387,7 @@ const RecommendationEngine = (function() {
             
             // Total score
             data.score = data.breakdown.theme_score + 
+                        data.breakdown.keyword_score + 
                         data.breakdown.contribution_score + 
                         data.breakdown.recency_score;
         }
