@@ -112,7 +112,11 @@ def convert_models():
             result_lr = sess_lr.run(output_names_lr, {input_name_lr: features})
             print(f"   ✓ Logistic regression test passed")
             print(f"     Number of outputs: {len(result_lr)}")
-            print(f"     Probabilities shape: {result_lr[1].shape}")
+            # Handle both numpy arrays and lists
+            if hasattr(result_lr[1], 'shape'):
+                print(f"     Probabilities shape: {result_lr[1].shape}")
+            else:
+                print(f"     Probabilities length: {len(result_lr[1]) if hasattr(result_lr[1], '__len__') else 'N/A'}")
             
         except ImportError:
             print("   ⚠ Warning: onnxruntime not installed, skipping validation")
