@@ -1,7 +1,7 @@
 //Constants for the SVG
 var margin = {top: 0, right: 0, bottom: 5, left: 15};
 var width = document.body.clientWidth - margin.left - margin.right;
-var height = 500 - margin.top - margin.bottom;
+var height = 800 - margin.top - margin.bottom;
 
 //---End Insert------
 

@@ -161,9 +161,12 @@ function clearLocalProjects() {
 
 // Function to reset/reload the entire visualization
 function resetVisualization() {
-    console.log('Resetting visualization...');
-    // Reload the entire page to reinitialize all visualizations
-    window.location.reload();
+    console.log('Resetting visualization (hard reload to bypass cache)...');
+    // Force a hard reload by adding a timestamp to bypass cache
+    // This ensures localStorage data is properly loaded
+    const url = new URL(window.location.href);
+    url.searchParams.set('_refresh', Date.now());
+    window.location.href = url.toString();
 }
 
 // Utility function to create safe HTML IDs from researcher names
