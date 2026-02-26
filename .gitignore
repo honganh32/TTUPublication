@@ -56,14 +56,15 @@ temp/
 htmlcov/
 .pytest_cache/
 
-# Model artifacts (optional - include if small, exclude if large)
-# model_artifacts/
-# Uncomment above line if model files are > 10MB
+# Model artifacts
+# IMPORTANT: For GitHub Pages deployment, ONNX models must be committed!
+# Keep .pkl files (Python-only) excluded, but include .onnx and .json files
+model_artifacts/*.pkl
 
-# Data files (exclude sensitive/large files)
-# *.csv
-# *.tsv
-# grants_final.tsv  # Uncomment if you want to exclude the main dataset
+# Data files - Keep grants_final.tsv for GitHub Pages!
+# Exclude only development/temporary data files
+all.csv
+*.xlsx
 
 # OS specific
 Thumbs.db

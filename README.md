@@ -2,9 +2,14 @@
 
 A machine learning-powered researcher recommendation system that predicts research themes and recommends qualified researchers for new projects based on historical grant data.
 
+## 🚀 Deployment Options
+
+- **🌐 GitHub Pages** (Recommended): Static hosting with client-side AI - [Deployment Guide](GITHUB_PAGES_DEPLOYMENT.md)
+- **💻 Local Server**: Python-based server for development - [Setup Guide](SERVER_SETUP.md)
+
 ## Features
 
-- 🤖 **Theme Prediction**: Automatically predicts research themes using trained ML models
+- 🤖 **Theme Prediction**: Automatically predicts research themes using trained ML models (ONNX/browser or Python)
 - 👥 **Researcher Recommendations**: Recommends researchers based on past project experience and theme matching
 - 📊 **Score Breakdown**: Shows detailed scoring breakdown (theme match, keyword similarity, contribution, recency)
 - 📄 **Related Papers**: Lists researcher's papers in the target theme
@@ -31,12 +36,45 @@ TTUPublication/
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: GitHub Pages (Static Hosting) 🌐
+
+Perfect for production deployment with no server maintenance!
+
+1. **Convert models to ONNX format:**
+   ```bash
+   pip install skl2onnx onnx onnxruntime scikit-learn
+   python convert_models_to_onnx.py
+   ```
+
+2. **Commit and push to GitHub:**
+   ```bash
+   git add model_artifacts/*.onnx model_artifacts/label_encoder.json
+   git commit -m "Add ONNX models for GitHub Pages"
+   git push origin main
+   ```
+
+3. **Enable GitHub Pages:**
+   - Go to repository Settings → Pages
+   - Select "GitHub Actions" as source
+   - Wait for deployment to complete
+
+4. **Access your site:**
+   ```
+   https://yourusername.github.io/TTUPublication/index.html
+   ```
+
+📖 **[Full GitHub Pages Deployment Guide](GITHUB_PAGES_DEPLOYMENT.md)**
+
+### Option 2: Local Python Server (Development) 💻
+
+Best for development and testing.
+
+**Prerequisites:**
 - Python 3.7+
 - scikit-learn, pandas, numpy
 - Web browser
 
-### Installation
+**Installation:**
 
 1. Clone the repository
 ```bash
@@ -55,7 +93,7 @@ jupyter notebook train_model.ipynb
 # Run all cells to retrain models
 ```
 
-4. Start the server
+4. Start the local server
 ```bash
 python server.py
 ```

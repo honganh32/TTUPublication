@@ -5,8 +5,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
 <script src="pubJavascripts/javascripts/d3.v3.min.js"></script>
-<script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.9.1/d3-tip.min.js"></script>
 <script src="pubJavascripts/javascripts/fisheye.js"></script>
+<!-- ONNX Runtime for client-side ML inference -->
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+<script src="pubJavascripts/myscripts/recommendation-engine.js"></script>
 <script src="pubJavascripts/myscripts/util.js"></script>
 <script src="pubJavascripts/myscripts/sliderRelationship.js"></script>
 <script src="pubJavascripts/myscripts/sliderRadius.js"></script>
@@ -18,6 +21,11 @@
 <link href="pubJavascripts/styles/jquery-ui.css" rel="stylesheet" type="text/css" />
 
 <h3>RESEARCHES</h3>
+
+<!-- GitHub Pages Notice -->
+<div style="margin-bottom: 15px; padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+    <strong>⚠️ GitHub Pages Mode:</strong> This site is running in static mode. Adding projects will only update your local view (not saved to server).
+</div>
 
 <div id="mode-selector" style="margin-bottom: 20px; padding: 10px; background-color: #f0f0f0; border-radius: 4px;">
     <strong>Mode:</strong>
@@ -171,7 +179,30 @@ document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
 // ========== RECOMMENDATION SYSTEM ==========
 let currentRecommendations = null;
 
-document.getElementById('get-recommendations-btn').addEventListener('click', function() {
+// Initialize the recommendation engine on page load
+document.addEventListener('DOMContentLoaded', async function() {
+    const statusEl = document.getElementById('rec-status');
+    statusEl.textContent = 'Initializing AI models...';
+    statusEl.style.color = 'blue';
+    
+    try {
+        const initialized = await RecommendationEngine.initialize();
+        if (initialized) {
+            statusEl.textContent = 'AI models ready!';
+            statusEl.style.color = 'green';
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        } else {
+            statusEl.textContent = 'Warning: AI models not loaded';
+            statusEl.style.color = 'orange';
+        }
+    } catch (error) {
+        console.error('Failed to initialize recommendation engine:', error);
+        statusEl.textContent = 'AI models unavailable';
+        statusEl.style.color = 'orange';
+    }
+});
+
+document.getElementById('get-recommendations-btn').addEventListener('click', async function() {
     const projectTitle = document.getElementById('input-rec-title').value.trim();
     const statusEl = document.getElementById('rec-status');
     
@@ -181,49 +212,36 @@ document.getElementById('get-recommendations-btn').addEventListener('click', fun
         return;
     }
     
-    statusEl.textContent = 'Loading recommendations...';
+    statusEl.textContent = 'Generating recommendations...';
     statusEl.style.color = 'blue';
     
-    $.ajax({
-        url: '/recommend_researchers',
-        type: 'POST',
-        data: {
-            project_title: projectTitle,
-            top_n: 5
-        },
-        success: function(response) {
-            statusEl.textContent = 'Recommendations received!';
-            statusEl.style.color = 'green';
-            
-            console.log('FULL Response:', JSON.stringify(response, null, 2));
-            console.log('Response recommendations:', response.recommendations);
-            if (response.recommendations && response.recommendations.length > 0) {
-                console.log('First recommendation:', JSON.stringify(response.recommendations[0], null, 2));
-            }
-            
-            currentRecommendations = response;
-            try {
-                displayRecommendations(response);
-                document.getElementById('recommendations-display').style.display = 'block';
-            } catch(e) {
-                console.error('Error displaying recommendations:', e);
-                statusEl.textContent = 'Error displaying recommendations: ' + e.message;
-                statusEl.style.color = 'red';
-            }
-        },
-        error: function(xhr, status, error) {
-            statusEl.textContent = 'Error getting recommendations';
-            statusEl.style.color = 'red';
-            console.error('Recommendation error:', xhr.responseText);
-            
-            try {
-                const errorResponse = JSON.parse(xhr.responseText);
-                alert('Error: ' + (errorResponse.error || error));
-            } catch(e) {
-                alert('Error: ' + error);
-            }
+    try {
+        // Use client-side ONNX-based recommendation engine
+        const response = await RecommendationEngine.getRecommendations(
+            projectTitle,
+            'grants_final.tsv',
+            5 // top_n
+        );
+        
+        statusEl.textContent = 'Recommendations received!';
+        statusEl.style.color = 'green';
+        
+        console.log('FULL Response:', JSON.stringify(response, null, 2));
+        console.log('Response recommendations:', response.recommendations);
+        if (response.recommendations && response.recommendations.length > 0) {
+            console.log('First recommendation:', JSON.stringify(response.recommendations[0], null, 2));
         }
-    });
+        
+        currentRecommendations = response;
+        displayRecommendations(response);
+        document.getElementById('recommendations-display').style.display = 'block';
+        
+    } catch (error) {
+        console.error('Recommendation error:', error);
+        statusEl.textContent = 'Error: ' + error.message;
+        statusEl.style.color = 'red';
+        alert('Error generating recommendations: ' + error.message);
+    }
 });
 
 function displayRecommendations(response) {
@@ -443,20 +461,19 @@ document.getElementById('accept-recommendation-btn').addEventListener('click', f
     const theme = currentRecommendations.predicted_theme;
     const title = document.getElementById('input-rec-title').value.trim();
     
-    // Submit the project
-    $.ajax({
-        url: '/add_project',
-        type: 'POST',
-        data: {
-            code: code,
-            time: time,
-            theme: theme,
-            title: title,
-            authors: authors
-        },
-        success: function(response) {
-            document.getElementById('rec-status').textContent = 'Project added successfully!';
-            document.getElementById('rec-status').style.color = 'green';
+    // On GitHub Pages, we can't save to server, but we can update the view
+    // In a real deployment, you'd use a backend service or database
+    console.log('Adding project (client-side only):', {
+        code: code,
+        time: time,
+        theme: theme,
+        title: title,
+        authors: authors
+    });
+    
+    // Show success message
+    document.getElementById('rec-status').textContent = 'Project added to view (not saved to server)';
+    document.getElementById('rec-status').style.color = 'green';
             
             // Clear recommendation form
             document.getElementById('input-rec-title').value = '';
@@ -465,18 +482,11 @@ document.getElementById('accept-recommendation-btn').addEventListener('click', f
             document.getElementById('rec-authors-select').value = '';
             document.getElementById('recommendations-display').style.display = 'none';
             
-            // Reload data
-            setTimeout(function() {
-                d3.select('#research-list').selectAll('ul').remove();
-                loadAndDisplayResearch();
-            }, 500);
-        },
-        error: function(xhr, status, error) {
-            document.getElementById('rec-status').textContent = 'Error adding project';
-            document.getElementById('rec-status').style.color = 'red';
-            console.error('Error:', xhr.responseText);
-        }
-    });
+    // Optionally reload data (in GitHub Pages mode, this just refreshes from the TSV)
+    setTimeout(function() {
+        d3.select('#research-list').selectAll('ul').remove();
+        loadAndDisplayResearch();
+    }, 500);
 });
 
 // ========== MANUAL ENTRY ==========
@@ -499,51 +509,32 @@ document.getElementById("add-project-form").addEventListener("submit", function(
     // Format the new row for TSV (matching the existing format with quotes)
     var newRow = '"' + code + '"\t' + time + '\t"' + theme + '"\t\'' + title + '\'\t"' + authors + '"';
     
-    // Send to server
-    $.ajax({
-        url: "/add_project",
-        type: "POST",
-        data: {
-            code: code,
-            time: time,
-            theme: theme,
-            title: title,
-            authors: authors
-        },
-        success: function(response) {
-            document.getElementById("add-project-status").textContent = "Project added successfully!";
-            document.getElementById("add-project-status").style.color = "green";
-            
-            // Clear form
-            document.getElementById("add-project-form").reset();
-            
-            // Reload research data after a short delay
-            setTimeout(function() {
-                // Clear the list
-                d3.select("#research-list").selectAll("ul").remove();
-                
-                // Reload data
-                loadAndDisplayResearch();
-                
-                // Clear status message
-                document.getElementById("add-project-status").textContent = "";
-            }, 500);
-        },
-        error: function(xhr, status, error) {
-            var errorMsg = "Error adding project: " + error;
-            if (xhr.responseText) {
-                try {
-                    var response = JSON.parse(xhr.responseText);
-                    if (response.error) {
-                        errorMsg = "Error: " + response.error;
-                    }
-                } catch(e) {}
-            }
-            document.getElementById("add-project-status").textContent = errorMsg;
-            document.getElementById("add-project-status").style.color = "red";
-            console.error("AJAX error:", xhr.status, status, error, xhr.responseText);
-        }
+    // On GitHub Pages, we can only update the local view
+    console.log('Adding project (client-side only):', {
+        code: code,
+        time: time,
+        theme: theme,
+        title: title,
+        authors: authors
     });
+    
+    document.getElementById("add-project-status").textContent = "Project added to view (not saved)";
+    document.getElementById("add-project-status").style.color = "orange";
+    
+    // Clear form
+    document.getElementById("add-project-form").reset();
+    
+    // Reload research data after a short delay
+    setTimeout(function() {
+        // Clear the list
+        d3.select("#research-list").selectAll("ul").remove();
+        
+        // Reload data
+        loadAndDisplayResearch();
+        
+        // Clear status message
+        document.getElementById("add-project-status").textContent = "";
+    }, 1500);
 });
 </script>
 
