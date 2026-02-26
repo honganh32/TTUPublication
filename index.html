@@ -103,9 +103,23 @@
 
 </div>
 
+<!-- Reset Visualization Button -->
+<div style="margin: 20px 0; padding: 10px; background-color: #fff; border: 1px solid #ddd; border-radius: 4px;">
+    <button type="button" id="reset-visualization-btn" style="padding: 10px 20px; background-color: #FF9800; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold;">
+        🔄 Reset Visualization
+    </button>
+    <span style="margin-left: 15px; color: #666;">Click to reload and refresh all visualizations</span>
+</div>
+
 <div id="research-list"></div>
 
 <script>
+// Function to reset/reload the entire visualization
+function resetVisualization() {
+    console.log('Resetting visualization...');
+    // Reload the entire page to reinitialize all visualizations
+    window.location.reload();
+}
 // Utility function to create safe HTML IDs from researcher names
 function getSafeId(str) {
     return str
@@ -155,6 +169,13 @@ function loadAndDisplayResearch() {
 
 // Load initial research data
 loadAndDisplayResearch();
+
+// Reset visualization button handler
+document.getElementById('reset-visualization-btn').addEventListener('click', function() {
+    if (confirm('This will reload the page and reset all visualizations. Continue?')) {
+        resetVisualization();
+    }
+});
 
 // ========== MODE SWITCHING ==========
 document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
@@ -482,11 +503,22 @@ document.getElementById('accept-recommendation-btn').addEventListener('click', f
             document.getElementById('rec-authors-select').value = '';
             document.getElementById('recommendations-display').style.display = 'none';
             
-    // Optionally reload data (in GitHub Pages mode, this just refreshes from the TSV)
+    // Clear recommendation form
+    document.getElementById('input-rec-title').value = '';
+    document.getElementById('rec-code').value = '';
+    document.getElementById('rec-time').value = '';
+    document.getElementById('rec-authors-select').value = '';
+    document.getElementById('recommendations-display').style.display = 'none';
+    
+    // Reload visualization after a short delay
     setTimeout(function() {
-        d3.select('#research-list').selectAll('ul').remove();
-        loadAndDisplayResearch();
-    }, 500);
+        document.getElementById('rec-status').textContent = 'Reloading visualization...';
+        document.getElementById('rec-status').style.color = 'blue';
+        
+        setTimeout(function() {
+            resetVisualization();
+        }, 500);
+    }, 1000);
 });
 
 // ========== MANUAL ENTRY ==========
@@ -524,16 +556,15 @@ document.getElementById("add-project-form").addEventListener("submit", function(
     // Clear form
     document.getElementById("add-project-form").reset();
     
-    // Reload research data after a short delay
+    // Show success and reload visualization
     setTimeout(function() {
-        // Clear the list
-        d3.select("#research-list").selectAll("ul").remove();
+        document.getElementById("add-project-status").textContent = "Reloading visualization...";
+        document.getElementById("add-project-status").style.color = "blue";
         
-        // Reload data
-        loadAndDisplayResearch();
-        
-        // Clear status message
-        document.getElementById("add-project-status").textContent = "";
+        // Reload the entire page to refresh visualization
+        setTimeout(function() {
+            resetVisualization();
+        }, 500);
     }, 1500);
 });
 </script>
