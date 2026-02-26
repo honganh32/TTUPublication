@@ -135,29 +135,29 @@ const RecommendationEngine = (function() {
             const outputs = session.outputNames;
             console.log('Model output names:', outputs);
             
-            // 6. Run logistic regression model WITHOUT specifying outputs
-            // This lets ONNX.js return only the outputs it can deserialize
+            // 6. Run logistic regression model, specifying which outputs to fetch
+            // This prevents errors from trying to fetch non-tensor outputs (like string labels)
             let results;
-            
-            console.log('Running model without specifying outputs...');
-            
             try {
-                // Run without output specification - ONNX.js will return what it can
-                results = await session.run(inputObj);
-                console.log('✓ Successfully ran model');
-                console.log('Returned output keys:', Object.keys(results));
+                // Try fetching all outputs first (ONNX will skip non-tensor ones)
+                results = await session.run(inputObj, outputs);
             } catch (runError) {
-                console.error('Failed to run model:', runError.message);
-                throw new Error(`Cannot run model: ${runError.message}`);
+                console.warn('Failed to fetch all outputs:', runError.message);
+                // Fallback: try fetching just the first output
+                console.log('Attempting to fetch first output only...');
+                try {
+                    results = await session.run(inputObj, [outputs[0]]);
+                    console.warn('⚠️ Warning: Using only first output due to output fetch error');
+                } catch (fallbackError) {
+                    throw new Error(`Cannot fetch model outputs: ${runError.message}`);
+                }
             }
             
-            // Safely iterate through returned outputs
+            // Safely iterate through outputs
             // 7. Get output details
             
             const outputDetails = {};
-            const returnedOutputNames = Object.keys(results);
-            
-            for (const name of returnedOutputNames) {
+            for (const name of outputs) {
                 try {
                     const outputValue = results[name];
                     outputDetails[name] = {
@@ -172,27 +172,29 @@ const RecommendationEngine = (function() {
             }
             console.log('Returned output details:', outputDetails);
             
-            // Find the label output (int64, single value - this is the predicted class index)
-            let classIndex = null;
-            let labelOutputName = null;
+            // Find the probabilities output (usually the first tensor output that's float32)
+            let probabilities = null;
+            let probabilityOutputName = null;
             
-            for (const outputName of returnedOutputNames) {
+            for (const outputName of outputs) {
                 try {
                     const output = results[outputName];
                     
                     if (output && output.data) {
                         console.log(`Output "${outputName}": type=${output.type}, dims=${JSON.stringify(output.dims)}, size=${output.data.length}`);
                         
-                        // Look for int64 with single value - that's the predicted class index
-                        if (output.type === 'int64' && output.data.length === 1) {
-                            classIndex = output.data[0];
-                            labelOutputName = outputName;
-                            console.log(`✓ Found class index output "${outputName}": ${classIndex}`);
+                        // Use the first float32 tensor output with 10+ elements (class probabilities)
+                        if (output.type === 'float32' && output.data.length >= 10) {
+                            probabilities = output.data;
+                            probabilityOutputName = outputName;
+                            console.log(`✓ Using output "${outputName}" as probabilities`);
                             break;
                         }
+                    } else {
+                        console.log(`Output "${outputName}": skipped (not a tensor)`);
                     }
                 } catch (e) {
-                    console.log(`Output "${outputName}": error accessing -`, e.message);
+                    console.log(`Output "${outputName}": error -`, e.message);
                 }
             }
             
@@ -205,9 +207,19 @@ const RecommendationEngine = (function() {
                 classIndex: classIndex
             });
             
-            // 8. Get predicted class name using the class index
-            const predictedTheme = labelEncoder.classes[classIndex];
-            const confidence = '50'; // Without full probabilities, use default confidence
+            // 7. Get predicted class index and class name
+            let maxProb = 0;
+            let predictedIdx = 0;
+            
+            for (let i = 0; i < probabilities.length; i++) {
+                if (probabilities[i] > maxProb) {
+                    maxProb = probabilities[i];
+                    predictedIdx = i;
+                }
+            }
+            
+            const predictedTheme = labelEncoder.classes[predictedIdx];
+            const confidence = (maxProb * 100).toFixed(1);
             
             console.log('Prediction Result:', { 
                 theme: predictedTheme, 
