@@ -274,9 +274,19 @@ const RecommendationEngine = (function() {
     }
     
     // Get researchers for a theme from grants data
-    async function getResearchersForTheme(theme, grantsData, projectTitle) {
+    async function getResearchersForTheme(theme, grantsData, projectTitle, weights = null) {
         if (!grantsData || !Array.isArray(grantsData)) {
             return [];
+        }
+        
+        // Default weights if not provided
+        if (!weights) {
+            weights = {
+                theme: 1.0,
+                keyword: 1.0,
+                contribution: 1.0,
+                recency: 1.0
+            };
         }
         
         // Vectorize the input project title for similarity comparison
@@ -385,11 +395,20 @@ const RecommendationEngine = (function() {
             // Recency bonus (recent projects weighted more - simplified)
             data.breakdown.recency_score = 10;
             
-            // Total score
-            data.score = data.breakdown.theme_score + 
-                        data.breakdown.keyword_score + 
-                        data.breakdown.contribution_score + 
-                        data.breakdown.recency_score;
+            // Apply weights to each component
+            const weighted_theme = data.breakdown.theme_score * weights.theme;
+            const weighted_keyword = data.breakdown.keyword_score * weights.keyword;
+            const weighted_contribution = data.breakdown.contribution_score * weights.contribution;
+            const weighted_recency = data.breakdown.recency_score * weights.recency;
+            
+            // Total score with weights applied
+            data.score = weighted_theme + weighted_keyword + weighted_contribution + weighted_recency;
+            
+            // Store weighted values for display (optional - keeping original breakdown for now)
+            data.breakdown.weighted_theme_score = weighted_theme;
+            data.breakdown.weighted_keyword_score = weighted_keyword;
+            data.breakdown.weighted_contribution_score = weighted_contribution;
+            data.breakdown.weighted_recency_score = weighted_recency;
         }
         
         // Sort by score and return top researchers
@@ -430,7 +449,7 @@ const RecommendationEngine = (function() {
     }
     
     // Main function: get recommendations for a project
-    async function getRecommendations(projectTitle, tsvPath, topN = 5) {
+    async function getRecommendations(projectTitle, tsvPath, topN = 5, weights = null) {
         if (!await initialize()) {
             throw new Error('Recommendation engine not initialized. Check browser console for errors.');
         }
@@ -446,8 +465,8 @@ const RecommendationEngine = (function() {
             
             console.log(`Predicted theme: "${prediction.theme}" (${prediction.confidence}% confidence)`);
             
-            // 3. Get researchers for this theme (with keyword similarity)
-            const researchers = await getResearchersForTheme(prediction.theme, grantsData, projectTitle);
+            // 3. Get researchers for this theme (with keyword similarity and custom weights)
+            const researchers = await getResearchersForTheme(prediction.theme, grantsData, projectTitle, weights);
             
             // 4. Return top N researchers
             const topResearchers = researchers.slice(0, topN);

@@ -77,6 +77,30 @@
             <label for="input-rec-title">Project Title:</label>
             <input type="text" id="input-rec-title" placeholder="Enter project title for recommendations" required style="width: 600px;">
         </div>
+        
+        <!-- Weight Controls -->
+        <div id="weight-controls" style="margin: 20px 0; padding: 15px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px;">
+            <h5 style="margin-top: 0; margin-bottom: 15px;">Score Weights</h5>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                    <label for="weight-theme" style="display: block; margin-bottom: 5px;">Theme Match Weight: <span id="weight-theme-value">1.0</span></label>
+                    <input type="range" id="weight-theme" min="0" max="3" step="0.1" value="1.0" style="width: 100%;">
+                </div>
+                <div>
+                    <label for="weight-keyword" style="display: block; margin-bottom: 5px;">Keyword Match Weight: <span id="weight-keyword-value">1.0</span></label>
+                    <input type="range" id="weight-keyword" min="0" max="3" step="0.1" value="1.0" style="width: 100%;">
+                </div>
+                <div>
+                    <label for="weight-contribution" style="display: block; margin-bottom: 5px;">Contribution Weight: <span id="weight-contribution-value">1.0</span></label>
+                    <input type="range" id="weight-contribution" min="0" max="3" step="0.1" value="1.0" style="width: 100%;">
+                </div>
+                <div>
+                    <label for="weight-recency" style="display: block; margin-bottom: 5px;">Recency Weight: <span id="weight-recency-value">1.0</span></label>
+                    <input type="range" id="weight-recency" min="0" max="3" step="0.1" value="1.0" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+        
         <button type="button" id="get-recommendations-btn" style="padding: 8px 15px; background-color: #2196F3; color: white; border: none; cursor: pointer; border-radius: 4px;">Get Recommendations</button>
         <span id="rec-status" style="margin-left: 15px;"></span>
     </form>
@@ -305,6 +329,73 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 });
 
+// Get current weights from sliders
+function getCurrentWeights() {
+    return {
+        theme: parseFloat(document.getElementById('weight-theme').value),
+        keyword: parseFloat(document.getElementById('weight-keyword').value),
+        contribution: parseFloat(document.getElementById('weight-contribution').value),
+        recency: parseFloat(document.getElementById('weight-recency').value)
+    };
+}
+
+// Update weight display values
+function updateWeightDisplays() {
+    const weights = getCurrentWeights();
+    document.getElementById('weight-theme-value').textContent = weights.theme.toFixed(1);
+    document.getElementById('weight-keyword-value').textContent = weights.keyword.toFixed(1);
+    document.getElementById('weight-contribution-value').textContent = weights.contribution.toFixed(1);
+    document.getElementById('weight-recency-value').textContent = weights.recency.toFixed(1);
+}
+
+// Recalculate recommendations with current weights
+async function recalculateRecommendations() {
+    if (!currentRecommendations) return;
+    
+    const projectTitle = document.getElementById('input-rec-title').value.trim();
+    const statusEl = document.getElementById('rec-status');
+    
+    statusEl.textContent = 'Recalculating with new weights...';
+    statusEl.style.color = 'blue';
+    
+    try {
+        const weights = getCurrentWeights();
+        const response = await RecommendationEngine.getRecommendations(
+            projectTitle,
+            'grants_final.tsv',
+            5, // top_n
+            weights
+        );
+        
+        statusEl.textContent = 'Recommendations updated!';
+        statusEl.style.color = 'green';
+        
+        currentRecommendations = response;
+        displayRecommendations(response);
+        
+    } catch (error) {
+        console.error('Recalculation error:', error);
+        statusEl.textContent = 'Error: ' + error.message;
+        statusEl.style.color = 'red';
+    }
+}
+
+// Add weight slider event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const weightSliders = ['weight-theme', 'weight-keyword', 'weight-contribution', 'weight-recency'];
+    weightSliders.forEach(id => {
+        const slider = document.getElementById(id);
+        if (slider) {
+            slider.addEventListener('input', updateWeightDisplays);
+            slider.addEventListener('change', async function() {
+                if (currentRecommendations) {
+                    await recalculateRecommendations();
+                }
+            });
+        }
+    });
+});
+
 document.getElementById('get-recommendations-btn').addEventListener('click', async function() {
     const projectTitle = document.getElementById('input-rec-title').value.trim();
     const statusEl = document.getElementById('rec-status');
@@ -319,11 +410,13 @@ document.getElementById('get-recommendations-btn').addEventListener('click', asy
     statusEl.style.color = 'blue';
     
     try {
+        const weights = getCurrentWeights();
         // Use client-side ONNX-based recommendation engine
         const response = await RecommendationEngine.getRecommendations(
             projectTitle,
             'grants_final.tsv',
-            5 // top_n
+            5, // top_n
+            weights
         );
         
         statusEl.textContent = 'Recommendations received!';
@@ -452,23 +545,35 @@ function createBreakdownVisualization(rec, safeId) {
         const maxScore = rec.score || 0;
         console.log('Max score:', maxScore);
         
-        // Calculate percentages
-        const themeScore = breakdown.theme_score || 0;
-        const keywordScore = breakdown.keyword_score || 0;
-        const contributionScore = breakdown.contribution_score || 0;
-        const recencyScore = breakdown.recency_score || 0;
+        // Check if we have weighted scores (new format) or base scores (old format)
+        const hasWeightedScores = breakdown.weighted_theme_score !== undefined;
+        
+        // Use weighted scores if available, otherwise use base scores
+        const themeScore = hasWeightedScores ? (breakdown.weighted_theme_score || 0) : (breakdown.theme_score || 0);
+        const keywordScore = hasWeightedScores ? (breakdown.weighted_keyword_score || 0) : (breakdown.keyword_score || 0);
+        const contributionScore = hasWeightedScores ? (breakdown.weighted_contribution_score || 0) : (breakdown.contribution_score || 0);
+        const recencyScore = hasWeightedScores ? (breakdown.weighted_recency_score || 0) : (breakdown.recency_score || 0);
         
         console.log('Theme Score:', themeScore, 'Keyword:', keywordScore, 'Contribution:', contributionScore, 'Recency:', recencyScore);
         
         const scores = [
-            { label: 'Theme Match', value: themeScore, color: '#4CAF50' },
-            { label: 'Keyword Match', value: keywordScore, color: '#2196F3' },
-            { label: 'Contribution', value: contributionScore, color: '#FF9800' },
-            { label: 'Recency Bonus', value: recencyScore, color: '#9C27B0' }
+            { label: 'Theme Match', value: themeScore, color: '#4CAF50', base: breakdown.theme_score || 0 },
+            { label: 'Keyword Match', value: keywordScore, color: '#2196F3', base: breakdown.keyword_score || 0 },
+            { label: 'Contribution', value: contributionScore, color: '#FF9800', base: breakdown.contribution_score || 0 },
+            { label: 'Recency Bonus', value: recencyScore, color: '#9C27B0', base: breakdown.recency_score || 0 }
         ];
         
         let html = `<div id="breakdown-${safeId}" style="display: none; margin-top: 15px; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">`;
         html += `<h5 style="margin-top: 0;">${rec.researcher} - Score Breakdown</h5>`;
+        
+        // Show current weights if weighted scores are used
+        if (hasWeightedScores) {
+            const weights = getCurrentWeights();
+            html += `<div style="margin-bottom: 10px; font-size: 12px; color: #666;">
+                <strong>Applied Weights:</strong> Theme: ${weights.theme.toFixed(1)}x, Keyword: ${weights.keyword.toFixed(1)}x, Contribution: ${weights.contribution.toFixed(1)}x, Recency: ${weights.recency.toFixed(1)}x
+            </div>`;
+        }
+        
         html += '<div style="display: flex; gap: 20px;">';
         
         // Bar chart visualization
@@ -479,8 +584,13 @@ function createBreakdownVisualization(rec, safeId) {
             const percentage = maxScore > 0 ? (item.value / maxScore) * 100 : 0;
             const displayValue = item.value.toFixed(1);
             
+            // Show base score if different from weighted score
+            const scoreLabel = hasWeightedScores && item.base !== item.value 
+                ? `${displayValue} (base: ${item.base.toFixed(1)})`
+                : displayValue;
+            
             html += `<div style="margin: 10px 0;">
-                <div style="font-size: 12px; margin-bottom: 3px;">${item.label}: ${displayValue}</div>
+                <div style="font-size: 12px; margin-bottom: 3px;">${item.label}: ${scoreLabel}</div>
                 <div style="width: 100%; height: 20px; background-color: #e0e0e0; border-radius: 3px; overflow: hidden;">
                     <div style="height: 100%; width: ${percentage}%; background-color: ${item.color}; display: flex; align-items: center; padding: 0 5px; color: white; font-size: 11px; font-weight: bold;">
                         ${percentage > 5 ? percentage.toFixed(0) + '%' : ''}
