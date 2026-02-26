@@ -172,10 +172,15 @@ const RecommendationEngine = (function() {
             }
             console.log('Returned output details:', outputDetails);
             
-            // Find the probabilities output (usually the first tensor output that's float32)
-            let probabilities = null;
-            let probabilityOutputName = null;
+            // Strategy: Try to get predicted class from outputs
+            // 1. First, look for output_label (int64) - direct prediction
+            // 2. Fall back to probabilities (float32) - compute max
             
+            let predictedIdx = null;
+            let maxProb = 0.95; // Default confidence when using direct label
+            let foundProbabilities = false;
+            
+            // First try to find direct label output (output_label)
             for (const outputName of outputs) {
                 try {
                     const output = results[outputName];
@@ -183,11 +188,26 @@ const RecommendationEngine = (function() {
                     if (output && output.data) {
                         console.log(`Output "${outputName}": type=${output.type}, dims=${JSON.stringify(output.dims)}, size=${output.data.length}`);
                         
-                        // Use the first float32 tensor output with 10+ elements (class probabilities)
+                        // Check for direct class label (int64, single value)
+                        if ((output.type === 'int64' || output.type === 'int32') && output.data.length === 1) {
+                            predictedIdx = Number(output.data[0]);
+                            console.log(`✓ Using output "${outputName}" as predicted class index: ${predictedIdx}`);
+                            break;
+                        }
+                        
+                        // Check for probabilities (float32, multiple values)
                         if (output.type === 'float32' && output.data.length >= 10) {
-                            probabilities = output.data;
-                            probabilityOutputName = outputName;
-                            console.log(`✓ Using output "${outputName}" as probabilities`);
+                            const probabilities = output.data;
+                            foundProbabilities = true;
+                            
+                            // Find max probability
+                            for (let i = 0; i < probabilities.length; i++) {
+                                if (probabilities[i] > maxProb) {
+                                    maxProb = probabilities[i];
+                                    predictedIdx = i;
+                                }
+                            }
+                            console.log(`✓ Using output "${outputName}" as probabilities (predicted index: ${predictedIdx}, confidence: ${(maxProb * 100).toFixed(1)}%)`);
                             break;
                         }
                     } else {
@@ -198,33 +218,20 @@ const RecommendationEngine = (function() {
                 }
             }
             
-            if (classIndex === null) {
-                throw new Error('Could not find predicted class output. Check console for available outputs. Returned: ' + returnedOutputNames.join(', '));
+            // Validate we got a prediction
+            if (predictedIdx === null) {
+                throw new Error('Could not extract predicted class from model outputs. Check console for details.');
             }
             
-            console.log('Using output:', { 
-                outputName: labelOutputName,
-                classIndex: classIndex
-            });
-            
-            // 7. Get predicted class index and class name
-            let maxProb = 0;
-            let predictedIdx = 0;
-            
-            for (let i = 0; i < probabilities.length; i++) {
-                if (probabilities[i] > maxProb) {
-                    maxProb = probabilities[i];
-                    predictedIdx = i;
-                }
-            }
-            
+            // Get the theme name from label encoder
             const predictedTheme = labelEncoder.classes[predictedIdx];
             const confidence = (maxProb * 100).toFixed(1);
             
             console.log('Prediction Result:', { 
                 theme: predictedTheme, 
+                classIndex: predictedIdx,
                 confidence: confidence + '%',
-                classIndex: classIndex
+                source: foundProbabilities ? 'probabilities' : 'direct_label'
             });
             
             return {
