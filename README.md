@@ -2,6 +2,10 @@
 
 A machine learning-powered researcher recommendation system that predicts research themes and recommends qualified researchers for new projects based on historical grant data.
 
+Featuring [TimeArcs](https://github.com/CreativeCodingLab/TimeArcs?tab=readme-ov-file) by Tommy Dang for visualization
+
+[Demonstration video](https://youtu.be/64nKAsR2hhg)
+
 ## 🚀 Deployment Options
 
 - **🌐 GitHub Pages** (Recommended): Static hosting with client-side AI - [Deployment Guide](GITHUB_PAGES_DEPLOYMENT.md)
