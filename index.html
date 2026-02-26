@@ -113,7 +113,7 @@
                     <strong style="color: #FF9800;">👥 Contribution Score</strong>
                     <div style="margin-left: 15px; line-height: 1.6;">
                         Base formula: <code>min(total_projects × 5, 50)</code><br>
-                        Rewards researchers with more overall experience (capped at 50 points).<br>
+                        Rewards researchers with more overall experience working with at least one another researchers (capped at 50 points).<br>
                         <em>Example: 10+ total projects = 50 points (max)</em>
                     </div>
                 </div>
@@ -121,9 +121,9 @@
                 <div style="margin-bottom: 5px;">
                     <strong style="color: #9C27B0;">⏰ Recency Score</strong>
                     <div style="margin-left: 15px; line-height: 1.6;">
-                        Base formula: <code>10 points</code> (simplified)<br>
-                        Gives a small bonus to encourage recent activity.<br>
-                        <em>Example: All researchers get 10 points</em>
+                        Base formula: <code>recent_theme_projects × 10</code><br>
+                        Counts theme-relevant projects from the last 3 years (2023-2026).<br>
+                        <em>Example: 3 recent projects in same theme = 3 × 10 = 30 points</em>
                     </div>
                 </div>
                 
@@ -135,20 +135,23 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                 <div>
                     <label for="weight-theme" style="display: block; margin-bottom: 5px;">Theme Match Weight: <span id="weight-theme-value">1.0</span></label>
-                    <input type="range" id="weight-theme" min="0" max="3" step="0.1" value="1.0" style="width: 100%;">
+                    <input type="range" id="weight-theme" min="-3" max="3" step="0.1" value="1.0" style="width: 100%;">
                 </div>
                 <div>
                     <label for="weight-keyword" style="display: block; margin-bottom: 5px;">Keyword Match Weight: <span id="weight-keyword-value">1.0</span></label>
-                    <input type="range" id="weight-keyword" min="0" max="3" step="0.1" value="1.0" style="width: 100%;">
+                    <input type="range" id="weight-keyword" min="-3" max="3" step="0.1" value="1.0" style="width: 100%;">
                 </div>
                 <div>
                     <label for="weight-contribution" style="display: block; margin-bottom: 5px;">Contribution Weight: <span id="weight-contribution-value">1.0</span></label>
-                    <input type="range" id="weight-contribution" min="0" max="3" step="0.1" value="1.0" style="width: 100%;">
+                    <input type="range" id="weight-contribution" min="-3" max="3" step="0.1" value="1.0" style="width: 100%;">
                 </div>
                 <div>
                     <label for="weight-recency" style="display: block; margin-bottom: 5px;">Recency Weight: <span id="weight-recency-value">1.0</span></label>
-                    <input type="range" id="weight-recency" min="0" max="3" step="0.1" value="1.0" style="width: 100%;">
+                    <input type="range" id="weight-recency" min="-3" max="3" step="0.1" value="1.0" style="width: 100%;">
                 </div>
+            </div>
+            <div style="margin-top: 10px; text-align: right;">
+                <button type="button" id="reset-weights-btn" style="padding: 6px 12px; background-color: #757575; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 13px;">Reset to Default (1.0)</button>
             </div>
         </div>
         
@@ -459,6 +462,23 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+    
+    // Reset weights button
+    const resetBtn = document.getElementById('reset-weights-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', async function() {
+            weightSliders.forEach(id => {
+                const slider = document.getElementById(id);
+                if (slider) {
+                    slider.value = 1.0;
+                }
+            });
+            updateWeightDisplays();
+            if (currentRecommendations) {
+                await recalculateRecommendations();
+            }
+        });
+    }
 });
 
 document.getElementById('get-recommendations-btn').addEventListener('click', async function() {

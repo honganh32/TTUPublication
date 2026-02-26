@@ -325,7 +325,11 @@ const RecommendationEngine = (function() {
                             };
                         }
                         researcherScores[author].theme_projects += 1;
-                        researcherScores[author].projects.push(grant.title);
+                        researcherScores[author].projects.push({
+                            title: grant.title,
+                            year: grant.time,
+                            theme: grant.theme
+                        });
                         
                         // Vectorize the project title for this researcher
                         if (inputVector) {
@@ -392,8 +396,19 @@ const RecommendationEngine = (function() {
             // Contribution score (how many projects overall)
             data.breakdown.contribution_score = Math.min(data.total_projects * 5, 50);
             
-            // Recency bonus (recent projects weighted more - simplified)
-            data.breakdown.recency_score = 10;
+            // Recency score (theme-relevant projects in last 3 years)
+            const currentYear = 2026;
+            const recentThreshold = currentYear - 3; // Last 3 years (2023-2026)
+            let recentThemeProjects = 0;
+            
+            for (const project of data.projects) {
+                const projectYear = parseInt(project.year);
+                if (!isNaN(projectYear) && projectYear >= recentThreshold && project.theme === theme) {
+                    recentThemeProjects++;
+                }
+            }
+            
+            data.breakdown.recency_score = recentThemeProjects * 10;
             
             // Apply weights to each component
             const weighted_theme = data.breakdown.theme_score * weights.theme;
