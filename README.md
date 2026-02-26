@@ -163,18 +163,20 @@ curl -X POST http://localhost:8000/recommend_researchers \
 
 Score breakdown for each researcher:
 
-1. **Theme Match** (0-100 points)
+1. **Theme Match**
    - 10 points per past project in target theme
 
-2. **Keyword/Title Similarity** (0-200 points)
-   - Cosine similarity between new and past project titles
-   - Boosted 3-4x for closely related papers (similarity > 0.7)
+2. **Keyword/Title Similarity**
+   - Uses TF-IDF similarity between new project title and researcher's past titles.
+      • Exact/near-exact match (≥85% similar): similarity × 200
+      • Partial match (>20% similar): similarity × 50
+      • Low similarity (≤20%): 0 points
 
-3. **Contribution Score** (0-20 points)
-   - Average contribution percentage in theme projects
+3. **Contribution Score**
+   - 5 points per each completed project (cap at 50)
 
-4. **Recency Bonus** (0+ points)
-   - 5 points per recent project (last 3 years)
+4. **Recency Bonus**
+   - 10 points per recent project (last 4 years)
 
 ## Training Data Improvements
 
@@ -235,7 +237,6 @@ See [SMALL_DATASET_GUIDE.md](SMALL_DATASET_GUIDE.md) for detailed strategies.
 | Overfitting Gap | Large (indicates more data needed) |
 
 ### Recent Improvements
-✅ Fixed "Quantum" theme prediction (was defaulting to "Education")
 ✅ Reduced overfitting with class weighting and regularization
 ✅ Implemented cross-validation for reliable estimates
 ✅ Added ensemble methods for variance reduction
