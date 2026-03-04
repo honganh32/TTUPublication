@@ -316,11 +316,20 @@ const RecommendationEngine = (function() {
                                 total_projects: 0,
                                 projects: [],
                                 titleVectors: [], // Store vectorized titles
+                                themeMatchedProjects: [], // For theme explanation
+                                recentProjects: [], // For recency explanation
+                                collaborators: new Set(), // For contribution explanation
                                 breakdown: {
                                     theme_score: 0,
                                     keyword_score: 0,
                                     contribution_score: 0,
                                     recency_score: 0
+                                },
+                                explanations: {
+                                    theme_projects: [],
+                                    keyword_matches: [],
+                                    collaborators: [],
+                                    recent_projects: []
                                 }
                             };
                         }
@@ -329,6 +338,19 @@ const RecommendationEngine = (function() {
                             title: grant.title,
                             year: grant.time,
                             theme: grant.theme
+                        });
+                        
+                        // Store theme-matched projects for explanation
+                        researcherScores[author].themeMatchedProjects.push({
+                            title: grant.title,
+                            year: grant.time
+                        });
+                        
+                        // Track collaborators
+                        authors.forEach(coAuthor => {
+                            if (coAuthor && coAuthor !== author) {
+                                researcherScores[author].collaborators.add(coAuthor);
+                            }
                         });
                         
                         // Vectorize the project title for this researcher
@@ -348,12 +370,19 @@ const RecommendationEngine = (function() {
             }
         }
         
-        // Count total projects for each researcher
+        // Count total projects for each researcher and collect ALL collaborators
         for (const grant of grantsData) {
             const authors = (grant.authors || '').split(',').map(a => a.trim());
             for (const author of authors) {
                 if (researcherScores[author]) {
                     researcherScores[author].total_projects += 1;
+                    
+                    // Track collaborators from ALL projects (not just theme-matched)
+                    authors.forEach(coAuthor => {
+                        if (coAuthor && coAuthor !== author) {
+                            researcherScores[author].collaborators.add(coAuthor);
+                        }
+                    });
                 }
             }
         }
@@ -369,14 +398,23 @@ const RecommendationEngine = (function() {
             if (inputVector && data.titleVectors.length > 0) {
                 let maxSimilarity = 0;
                 let bestMatchTitle = '';
+                let allSimilarities = [];
                 
                 for (const titleData of data.titleVectors) {
                     const similarity = cosineSimilarity(inputVector, titleData.vector);
+                    allSimilarities.push({
+                        title: titleData.title,
+                        similarity: similarity
+                    });
                     if (similarity > maxSimilarity) {
                         maxSimilarity = similarity;
                         bestMatchTitle = titleData.title;
                     }
                 }
+                
+                // Sort by similarity and keep top matches for explanation
+                allSimilarities.sort((a, b) => b.similarity - a.similarity);
+                data.explanations.keyword_matches = allSimilarities.slice(0, 5).filter(m => m.similarity > 0.1);
                 
                 // Exact match detection (threshold >= 0.85)
                 if (maxSimilarity >= 0.85) {
@@ -405,10 +443,18 @@ const RecommendationEngine = (function() {
                 const projectYear = parseInt(project.year);
                 if (!isNaN(projectYear) && projectYear >= recentThreshold && project.theme === theme) {
                     recentThemeProjects++;
+                    data.explanations.recent_projects.push({
+                        title: project.title,
+                        year: project.year
+                    });
                 }
             }
             
             data.breakdown.recency_score = recentThemeProjects * 10;
+            
+            // Store explanation data
+            data.explanations.theme_projects = data.themeMatchedProjects;
+            data.explanations.collaborators = Array.from(data.collaborators);
             
             // Apply weights to each component
             const weighted_theme = data.breakdown.theme_score * weights.theme;

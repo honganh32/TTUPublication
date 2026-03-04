@@ -625,7 +625,9 @@ function createBreakdownVisualization(rec, safeId) {
         console.log('Full rec object:', rec);
         
         const breakdown = rec.breakdown || {};
+        const explanations = rec.explanations || {};
         console.log('Breakdown object:', breakdown);
+        console.log('Explanations object:', explanations);
         
         const maxScore = rec.score || 0;
         console.log('Max score:', maxScore);
@@ -649,66 +651,135 @@ function createBreakdownVisualization(rec, safeId) {
         ];
         
         let html = `<div id="breakdown-${safeId}" style="display: none; margin-top: 15px; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">`;
-        html += `<h5 style="margin-top: 0;">${rec.researcher} - Score Breakdown</h5>`;
+        html += `<h5 style="margin-top: 0;">${rec.researcher} - Detailed Score Breakdown</h5>`;
         
         // Show current weights if weighted scores are used
         if (hasWeightedScores) {
             const weights = getCurrentWeights();
-            html += `<div style="margin-bottom: 10px; font-size: 12px; color: #666;">
+            html += `<div style="margin-bottom: 15px; padding: 10px; background-color: #fff; border-left: 3px solid #2196F3; font-size: 12px; color: #666;">
                 <strong>Applied Weights:</strong> Theme: ${weights.theme.toFixed(1)}x, Keyword: ${weights.keyword.toFixed(1)}x, Contribution: ${weights.contribution.toFixed(1)}x, Recency: ${weights.recency.toFixed(1)}x
             </div>`;
         }
         
-        html += '<div style="display: flex; gap: 20px;">';
+        // Single Stacked Bar Chart
+        html += '<div style="margin-bottom: 20px;">';
+        html += '<strong style="display: block; margin-bottom: 10px;">Score Composition (Total: ' + maxScore.toFixed(1) + ' points)</strong>';
+        html += '<div style="width: 100%; height: 40px; background-color: #e0e0e0; border-radius: 4px; overflow: hidden; display: flex; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);">';
         
-        // Bar chart visualization
-        html += '<div style="flex: 1;">';
-        html += '<strong>Score Components:</strong><br>';
-        
+        // Calculate percentages for stacked bar
+        let cumulativePercentage = 0;
         scores.forEach(item => {
             const percentage = maxScore > 0 ? (item.value / maxScore) * 100 : 0;
-            const displayValue = item.value.toFixed(1);
-            
-            // Show base score if different from weighted score
-            const scoreLabel = hasWeightedScores && item.base !== item.value 
-                ? `${displayValue} (base: ${item.base.toFixed(1)})`
-                : displayValue;
-            
-            html += `<div style="margin: 10px 0;">
-                <div style="font-size: 12px; margin-bottom: 3px;">${item.label}: ${scoreLabel}</div>
-                <div style="width: 100%; height: 20px; background-color: #e0e0e0; border-radius: 3px; overflow: hidden;">
-                    <div style="height: 100%; width: ${percentage}%; background-color: ${item.color}; display: flex; align-items: center; padding: 0 5px; color: white; font-size: 11px; font-weight: bold;">
-                        ${percentage > 5 ? percentage.toFixed(0) + '%' : ''}
-                    </div>
-                </div>
-            </div>`;
+            if (percentage > 0) {
+                html += `<div style="height: 100%; width: ${percentage}%; background-color: ${item.color}; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold; border-right: 1px solid white;" title="${item.label}: ${item.value.toFixed(1)} (${percentage.toFixed(1)}%)">`;
+                if (percentage > 8) {
+                    html += `${percentage.toFixed(0)}%`;
+                }
+                html += '</div>';
+            }
+            cumulativePercentage += percentage;
         });
         
         html += '</div>';
         
-        // Summary stats
-        html += '<div style="flex: 0.5;">';
-        html += '<strong>Summary:</strong><br>';
-        html += `<div style="font-size: 14px; line-height: 1.8;">
-            <strong>Total Score:</strong> ${rec.score.toFixed(2)}<br>
-            <strong>Theme Proj:</strong> ${rec.theme_projects}<br>
-            <strong>Total Proj:</strong> ${rec.total_projects}<br>
+        // Legend for stacked bar
+        html += '<div style="display: flex; gap: 15px; margin-top: 8px; flex-wrap: wrap; font-size: 12px;">';
+        scores.forEach(item => {
+            const scoreLabel = hasWeightedScores && item.base !== item.value 
+                ? `${item.value.toFixed(1)} (base: ${item.base.toFixed(1)})`
+                : item.value.toFixed(1);
+            html += `<div style="display: flex; align-items: center; gap: 5px;">
+                <span style="width: 12px; height: 12px; background-color: ${item.color}; border-radius: 2px; display: inline-block;"></span>
+                <span><strong>${item.label}:</strong> ${scoreLabel}</span>
+            </div>`;
+        });
+        html += '</div>';
+        html += '</div>';
+        
+        // Summary Stats
+        html += '<div style="display: flex; gap: 15px; margin-bottom: 20px; padding: 10px; background-color: #fff; border-radius: 4px;">';
+        html += `<div style="flex: 1;">
+            <div style="font-size: 11px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Theme Projects</div>
+            <div style="font-size: 20px; font-weight: bold; color: #4CAF50;">${rec.theme_projects}</div>
+        </div>`;
+        html += `<div style="flex: 1;">
+            <div style="font-size: 11px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Total Projects</div>
+            <div style="font-size: 20px; font-weight: bold; color: #2196F3;">${rec.total_projects}</div>
+        </div>`;
+        html += `<div style="flex: 1;">
+            <div style="font-size: 11px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Total Score</div>
+            <div style="font-size: 20px; font-weight: bold; color: #333;">${maxScore.toFixed(1)}</div>
         </div>`;
         html += '</div>';
         
-        html += '</div>';
+        // Detailed Explanations
+        html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
         
-        // Related papers section
-        if (rec.related_papers && rec.related_papers.length > 0) {
-            html += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">';
-            html += '<strong style="display: block; margin-bottom: 8px;">Related Papers:</strong>';
-            html += '<ul style="margin: 8px 0; padding-left: 20px; font-size: 13px;">';
-            rec.related_papers.forEach(paper => {
-                html += `<li style="margin: 4px 0; line-height: 1.4;">${paper}</li>`;
+        // 1. Theme Match Explanation
+        html += '<div style="background-color: #fff; padding: 12px; border-left: 4px solid #4CAF50; border-radius: 4px;">';
+        html += '<strong style="color: #4CAF50; display: block; margin-bottom: 8px;">🎯 Theme Match Projects</strong>';
+        if (explanations.theme_projects && explanations.theme_projects.length > 0) {
+            html += `<div style="font-size: 12px; color: #666; margin-bottom: 8px;">${explanations.theme_projects.length} project(s) in the predicted theme:</div>`;
+            html += '<ul style="margin: 0; padding-left: 20px; font-size: 12px; max-height: 150px; overflow-y: auto;">';
+            explanations.theme_projects.forEach(proj => {
+                html += `<li style="margin: 4px 0; line-height: 1.4;"><strong>[${proj.year}]</strong> ${proj.title}</li>`;
             });
             html += '</ul>';
-            html += '</div>';
+        } else {
+            html += '<div style="font-size: 12px; color: #999; font-style: italic;">No projects in this theme</div>';
         }
+        html += '</div>';
+        
+        // 2. Keyword Match Explanation
+        html += '<div style="background-color: #fff; padding: 12px; border-left: 4px solid #2196F3; border-radius: 4px;">';
+        html += '<strong style="color: #2196F3; display: block; margin-bottom: 8px;">🔍 Most Relevant Past Work</strong>';
+        if (explanations.keyword_matches && explanations.keyword_matches.length > 0) {
+            html += `<div style="font-size: 12px; color: #666; margin-bottom: 8px;">Top ${explanations.keyword_matches.length} similar titles:</div>`;
+            html += '<ul style="margin: 0; padding-left: 20px; font-size: 12px; max-height: 150px; overflow-y: auto;">';
+            explanations.keyword_matches.forEach(match => {
+                const similarityPercent = (match.similarity * 100).toFixed(1);
+                const bgColor = match.similarity >= 0.85 ? '#c8e6c9' : match.similarity >= 0.5 ? '#e3f2fd' : '#fff';
+                html += `<li style="margin: 4px 0; line-height: 1.4; padding: 4px; background-color: ${bgColor}; border-radius: 3px;">
+                    <strong style="color: #2196F3;">${similarityPercent}% match:</strong> ${match.title}
+                </li>`;
+            });
+            html += '</ul>';
+        } else {
+            html += '<div style="font-size: 12px; color: #999; font-style: italic;">No significant keyword matches</div>';
+        }
+        html += '</div>';
+        
+        // 3. Contribution Explanation (Collaborators)
+        html += '<div style="background-color: #fff; padding: 12px; border-left: 4px solid #FF9800; border-radius: 4px;">';
+        html += '<strong style="color: #FF9800; display: block; margin-bottom: 8px;">👥 Past Collaborators</strong>';
+        if (explanations.collaborators && explanations.collaborators.length > 0) {
+            html += `<div style="font-size: 12px; color: #666; margin-bottom: 8px;">${explanations.collaborators.length} unique collaborator(s):</div>`;
+            html += '<div style="font-size: 12px; max-height: 150px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 5px;">';
+            explanations.collaborators.forEach(collab => {
+                html += `<span style="background-color: #fff3e0; padding: 4px 8px; border-radius: 12px; border: 1px solid #FF9800;">${collab}</span>`;
+            });
+            html += '</div>';
+        } else {
+            html += '<div style="font-size: 12px; color: #999; font-style: italic;">No collaborators found</div>';
+        }
+        html += '</div>';
+        
+        // 4. Recency Explanation
+        html += '<div style="background-color: #fff; padding: 12px; border-left: 4px solid #9C27B0; border-radius: 4px;">';
+        html += '<strong style="color: #9C27B0; display: block; margin-bottom: 8px;">⏰ Recent Work (2023-2026)</strong>';
+        if (explanations.recent_projects && explanations.recent_projects.length > 0) {
+            html += `<div style="font-size: 12px; color: #666; margin-bottom: 8px;">${explanations.recent_projects.length} recent project(s):</div>`;
+            html += '<ul style="margin: 0; padding-left: 20px; font-size: 12px; max-height: 150px; overflow-y: auto;">';
+            explanations.recent_projects.forEach(proj => {
+                html += `<li style="margin: 4px 0; line-height: 1.4;"><strong>[${proj.year}]</strong> ${proj.title}</li>`;
+            });
+            html += '</ul>';
+        } else {
+            html += '<div style="font-size: 12px; color: #999; font-style: italic;">No recent projects in this theme</div>';
+        }
+        html += '</div>';
+        
+        html += '</div>'; // End grid
         
         html += '</div>';
         
