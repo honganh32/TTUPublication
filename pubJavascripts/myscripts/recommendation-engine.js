@@ -342,6 +342,7 @@ const RecommendationEngine = (function() {
                         
                         // Store theme-matched projects for explanation
                         researcherScores[author].themeMatchedProjects.push({
+                            code: grant.Code,
                             title: grant.title,
                             year: grant.time
                         });
@@ -358,7 +359,9 @@ const RecommendationEngine = (function() {
                             try {
                                 const titleVector = await vectorizeText(grant.title);
                                 researcherScores[author].titleVectors.push({
+                                    code: grant.Code,
                                     title: grant.title,
+                                    year: grant.time,
                                     vector: titleVector
                                 });
                             } catch (e) {
@@ -403,7 +406,9 @@ const RecommendationEngine = (function() {
                 for (const titleData of data.titleVectors) {
                     const similarity = cosineSimilarity(inputVector, titleData.vector);
                     allSimilarities.push({
+                        code: titleData.code,
                         title: titleData.title,
+                        year: titleData.year,
                         similarity: similarity
                     });
                     if (similarity > maxSimilarity) {
@@ -444,6 +449,7 @@ const RecommendationEngine = (function() {
                 if (!isNaN(projectYear) && projectYear >= recentThreshold && project.theme === theme) {
                     recentThemeProjects++;
                     data.explanations.recent_projects.push({
+                        code: project.code,
                         title: project.title,
                         year: project.year
                     });

@@ -1154,7 +1154,7 @@ function createBreakdownVisualization(rec, safeId) {
             html += `<div style="font-size: 12px; color: #666; margin-bottom: 8px;">${explanations.theme_projects.length} project(s) in the predicted theme:</div>`;
             html += '<ul style="margin: 0; padding-left: 20px; font-size: 12px; max-height: 150px; overflow-y: auto;">';
             explanations.theme_projects.forEach(proj => {
-                html += `<li style="margin: 4px 0; line-height: 1.4;"><strong>[${proj.year}]</strong> ${proj.title}</li>`;
+                html += `<li style="margin: 4px 0; line-height: 1.4;"><strong>[${proj.code || 'N/A'}]</strong> <strong>[${proj.year}]</strong> ${proj.title}</li>`;
             });
             html += '</ul>';
         } else {
@@ -1176,7 +1176,7 @@ function createBreakdownVisualization(rec, safeId) {
                 const bgColor = match.similarity >= 0.85 ? '#c8e6c9' : match.similarity >= 0.5 ? '#e3f2fd' : '#fff';
                 const emoji = match.similarity >= 0.85 ? '🎯' : match.similarity >= 0.5 ? '✓' : '•';
                 html += `<li style="margin: 4px 0; line-height: 1.4; padding: 4px; background-color: ${bgColor}; border-radius: 3px;">
-                    <strong style="color: #2196F3;">${emoji} ${similarityPercent}% match:</strong> ${match.title}
+                    <strong style="color: #2196F3;">${emoji} ${similarityPercent}% match:</strong> <strong>[${match.code || 'N/A'}]</strong> <strong>[${match.year || 'N/A'}]</strong> ${match.title}
                 </li>`;
             });
             html += '</ul>';
@@ -1213,7 +1213,7 @@ function createBreakdownVisualization(rec, safeId) {
             html += `<div style="font-size: 12px; color: #666; margin-bottom: 8px;">${explanations.recent_projects.length} recent project(s):</div>`;
             html += '<ul style="margin: 0; padding-left: 20px; font-size: 12px; max-height: 150px; overflow-y: auto;">';
             explanations.recent_projects.forEach(proj => {
-                html += `<li style="margin: 4px 0; line-height: 1.4;"><strong>[${proj.year}]</strong> ${proj.title}</li>`;
+                html += `<li style="margin: 4px 0; line-height: 1.4;"><strong>[${proj.code || 'N/A'}]</strong> <strong>[${proj.year}]</strong> ${proj.title}</li>`;
             });
             html += '</ul>';
         } else {
