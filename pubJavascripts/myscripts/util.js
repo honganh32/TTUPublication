@@ -105,7 +105,7 @@ function getColor(category) {
   var sat = 200;
   // Updated colors for better visibility and differentiation on white background
   if (category=="Foundations")
-    return "#ee82ee"; // Light Magenta
+    return "#f59e0b"; // Orange/Yellow (Amber-500) - distinct from red
   else if (category=="Systems")
     return "#2563eb"; // Blue-600
   else if (category=="Data")
