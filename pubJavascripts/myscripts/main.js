@@ -186,8 +186,8 @@ loadGrantsDataWithLocal("grants_final.tsv", function(error, data_) {
     // Auto-calculate min and max years from data
     let years = data.map(d => parseInt(d["Time"])).filter(y => !isNaN(y));
     if (years.length > 0) {
-        minYear = Math.min(...years);
-        maxYear = Math.max(...years);
+        minYear = Math.min(...years) - 1;
+        maxYear = Math.max(...years) + 1;
         numYear = (maxYear - minYear) + 1;
         console.log(`Auto-scaled year range: ${minYear} - ${maxYear}, numYear: ${numYear}`);
         
