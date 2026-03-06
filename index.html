@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
 
-<body>
+<body style="margin-right: 270px; box-sizing: border-box;">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
 <script src="pubJavascripts/javascripts/d3.v3.min.js"></script>
@@ -21,7 +21,7 @@
 <link href="pubJavascripts/styles/jquery-ui.css" rel="stylesheet" type="text/css" />
 
 <!-- Researcher List Sidebar -->
-<div id="researcher-sidebar" style="position: fixed; right: 0; top: 0; width: 250px; height: 100vh; background-color: #f8f9fa; border-left: 2px solid #dee2e6; overflow-y: auto; z-index: 500; transform: translateX(250px); transition: transform 0.3s ease;">
+<div id="researcher-sidebar" style="position: fixed; right: 0; top: 0; width: 250px; height: 100vh; background-color: #f8f9fa; border-left: 2px solid #dee2e6; overflow-y: auto; z-index: 500; transform: translateX(0px); transition: transform 0.3s ease;">
     <div style="padding: 10px; padding-top: 60px;">
         <input type="text" id="researcher-search" placeholder="Search researchers..." style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; margin-bottom: 10px; box-sizing: border-box;">
         <div id="researcher-list" style="max-height: calc(100vh - 250px); overflow-y: auto;">
@@ -30,8 +30,8 @@
     </div>
 </div>
 
-<!-- Toggle button for researcher sidebar -->
-<button id="toggle-researcher-sidebar" style="position: fixed; right: 10px; top: 10px; padding: 10px 15px; background-color: #343a40; color: white; border: none; border-radius: 4px; cursor: pointer; z-index: 501; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+<!-- Toggle button for researcher sidebar (hidden - sidebar always visible) -->
+<button id="toggle-researcher-sidebar" style="display: none; position: fixed; right: 10px; top: 10px; padding: 10px 15px; background-color: #343a40; color: white; border: none; border-radius: 4px; cursor: pointer; z-index: 501; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
     📋 Researchers
 </button>
 
@@ -949,14 +949,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make currentHighlightedResearcher global for syncing
     window.currentHighlightedResearcher = null;
     
-    // Toggle sidebar (clicking button opens or closes it)
-    toggleSidebarBtn.addEventListener('click', function() {
-        if (researcherSidebar.style.transform === 'translateX(0px)') {
-            researcherSidebar.style.transform = 'translateX(250px)';
-        } else {
-            researcherSidebar.style.transform = 'translateX(0px)';
-        }
-    });
+    // Sidebar is always visible - toggle button disabled
+    // (Toggle functionality commented out since sidebar is always shown)
+    // toggleSidebarBtn.addEventListener('click', function() {
+    //     if (researcherSidebar.style.transform === 'translateX(0px)') {
+    //         researcherSidebar.style.transform = 'translateX(250px)';
+    //     } else {
+    //         researcherSidebar.style.transform = 'translateX(0px)';
+    //     }
+    // });
     
     // Function to populate researcher list from visualization data
     window.populateResearcherList = function() {
